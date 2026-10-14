@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date
 import math
 import pandas as pd
 import requests
@@ -6,22 +6,77 @@ import streamlit as st
 
 # Configuración de la página web
 st.set_page_config(
-    page_title="Piquis · AI Sports Analytics", page_icon="⚡", layout="wide"
+    page_title="Piquis AI · Elite Sports Betting", page_icon="⚡", layout="wide"
 )
 
-# Estilos CSS personalizados para una UX moderna y limpia
+# Estilos CSS avanzados para una UI/UX ultra limpia, moderna y de nivel comercial
 st.markdown("""
     <style>
-    .main { background-color: #0f172a; color: #f8fafc; }
-    .stMetric { background-color: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155; }
-    .card-partido { background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #334155; }
+    /* Estilos generales y fondo oscuro elegante */
+    .main { background-color: #090d16; color: #f1f5f9; }
+    
+    /* Tarjetas de partidos y picks */
+    .card-match {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        padding: 24px;
+        border-radius: 16px;
+        margin-bottom: 20px;
+        border: 1px solid #334155;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        transition: transform 0.2s ease;
+    }
+    .card-match:hover {
+        border-color: #3b82f6;
+    }
+    
+    /* Cajas de IA / Explicación del modelo */
+    .ai-box {
+        background-color: #111827;
+        border-left: 4px solid #3b82f6;
+        padding: 16px;
+        border-radius: 0 12px 12px 0;
+        margin-top: 12px;
+        font-size: 14px;
+        color: #e2e8f0;
+    }
+    
+    /* Insignias de mercados */
+    .badge-ml { background-color: #3b82f6; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .badge-spread { background-color: #8b5cf6; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .badge-total { background-color: #f59e0b; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    
+    /* Métricas estilizadas */
+    .metric-container {
+        background-color: #1e293b;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid #334155;
+        text-align: center;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("⚡ Piquis · Analista Deportivo & Modelos AI")
-st.markdown(
-    "Plataforma cuantitativa avanzada: **Pitágoras, Log5, Ventaja Local, Proyecciones, Spreads, Totales y Criterio de Kelly** optimizada para **Draftea y Playdoit**."
-)
+# Encabezado principal de la aplicación
+col_h1, col_h2 = st.columns([4, 1])
+with col_h1:
+  st.markdown(
+      "# ⚡ Piquis AI <span style='color: #3b82f6; font-size: 20px;'>Quantitative"
+      " Betting Engine</span>",
+      unsafe_allow_html=True,
+  )
+  st.markdown(
+      "Modelo predictivo especializado en **Pitágoras, Log5, Ventaja Local,"
+      " Proyecciones y Kelly** optimizado para encontrar valor (+EV) en"
+      " **Draftea y Playdoit**."
+  )
+with col_h2:
+  st.markdown(
+      "<div style='text-align: right; padding-top: 10px;'><span"
+      " style='background-color: #22c55e20; color: #22c55e; padding: 6px 12px;"
+      " border-radius: 20px; font-size: 12px; font-weight: bold;'>🟢 Sistema"
+      " En Línea</span></div>",
+      unsafe_allow_html=True,
+  )
 
 # --- 1. CONFIGURACIÓN DE LIGAS Y MERCADOS ---
 SITE_API = "https://site.api.espn.com/apis/site/v2/sports"
@@ -150,26 +205,30 @@ LEAGUES = [
     },
 ]
 
-# Sidebar Interactiva (Calendario y Filtros UX)
-st.sidebar.header("📅 Calendario & Filtros")
+# Sidebar Interactiva de Alta Gama
+st.sidebar.markdown(
+    "### 🎛️ Panel de Control"
+)
 fecha_seleccionada = st.sidebar.date_input(
-    "Selecciona Fecha de Análisis", date.today()
+    "📅 Calendario de Partidos", date.today()
 )
 fecha_str = fecha_seleccionada.strftime("%Y%m%d")
 
-deportes_disponibles = ["Todos"] + [l["name"] for l in LEAGUES]
-deporte_filtro = st.sidebar.selectbox("Filtrar por Liga / Deporte", deportes_disponibles)
+deportes_disponibles = ["Todas las Ligas"] + [l["name"] for l in LEAGUES]
+deporte_filtro = st.sidebar.selectbox(
+    "⚽ Filtrar Deporte / Liga", deportes_disponibles
+)
 
 st.sidebar.markdown("---")
-st.sidebar.header("⚙️ Gestión de Bankroll")
+st.sidebar.markdown("### 💰 Parámetros Financieros")
 casa_apuestas = st.sidebar.selectbox(
-    "Casa de Apuestas Objetivo:", ["Playdoit", "Draftea"]
+    "Casa Objetivo:", ["Playdoit", "Draftea"]
 )
 banco = st.sidebar.number_input(
-    "Bankroll Inicial ($)", value=1000.0, step=100.0, format="%.2f"
+    "Bankroll Disponible ($)", value=1000.0, step=100.0, format="%.2f"
 )
 umbral_edge = (
-    st.sidebar.slider("Edge Mínimo Requerido (%)", 0.5, 10.0, 1.5, 0.5) / 100.0
+    st.sidebar.slider("Edge Mínimo Requerido (%)", 0.5, 10.0, 1.0, 0.5) / 100.0
 )
 
 
@@ -192,7 +251,6 @@ def descargar_datos_fecha(f_str):
   tablas_totales = {}
   for league in LEAGUES:
     try:
-      # Scoreboard con fecha específica
       url = f"{SITE_API}/{league['path']}/scoreboard"
       response = requests.get(
           url, params={"dates": f_str, "limit": 100}, timeout=10
@@ -278,7 +336,6 @@ def descargar_datos_fecha(f_str):
     except Exception:
       pass
 
-    # Descargar Standings para modelos Pitagóricos
     try:
       url_s = f"{STANDINGS_API}/{league['path']}/standings"
       res_s = requests.get(url_s, timeout=10)
@@ -321,11 +378,11 @@ def descargar_datos_fecha(f_str):
   return partidos_totales, tablas_totales
 
 
-with st.spinner(f"Analizando agenda y cuotas para el {fecha_seleccionada}..."):
+with st.spinner("Sincronizando cuotas en vivo y ejecutando modelos de IA..."):
   partidos_crudos, tablas_datos = descargar_datos_fecha(fecha_str)
 
 
-# Fórmulas
+# Fórmulas de modelado
 def pitagoras(pf, pa, exp):
   if pf <= 0 and pa <= 0:
     return None
@@ -468,7 +525,7 @@ for p in partidos_crudos:
   )
   if not league:
     continue
-  if deporte_filtro != "Todos" and league["name"] != deporte_filtro:
+  if deporte_filtro != "Todas las Ligas" and league["name"] != deporte_filtro:
     continue
 
   tabla = tablas_datos.get(p["league_key"], {})
@@ -606,163 +663,24 @@ for p in partidos_crudos:
 
   candidatos.sort(key=lambda c: c["ev"], reverse=True)
 
-  analisis_eventos.append({
-      "partido": f"{p['local']} vs {p['visitante']}",
-      "liga": league["name"],
-      "logo_local": p["logo_local"],
-      "logo_visitante": p["logo_visitante"],
-      "local_nombre": p["local"],
-      "visitante_nombre": p["visitante"],
-      "pitagoras_local": p_pit_l,
-      "pitagoras_visitante": p_pit_v,
-      "log5_local": neutral_log5,
-      "proyeccion": proyeccion,
-      "pick": candidatos[0] if candidatos else None,
-      "candidatos": candidatos,
-  })
+  # Generador de explicación automatizada de IA basada en los datos cuantitativos
+  pick_principal = candidatos[0] if candidatos else None
+  explicacion_ia = ""
+  if pick_principal:
+    mercado_txt = pick_principal["mercado"]
+    prob_txt = f"{pick_principal['prob_modelo']*100:.1f}%"
+    edge_txt = f"+{pick_principal['edge']*100:.1f}%"
+    ev_txt = f"+{pick_principal['ev']*100:.1f}%"
+    pit_l_txt = f"{p_pit_l*100:.1f}%"
+    pit_v_txt = f"{p_pit_v*100:.1f}%"
+    log5_txt = f"{neutral_log5*100:.1f}%"
 
-# --- 3. PESTAÑAS DE NAVEGACIÓN UX ---
-tab1, tab2, tab3 = st.tabs(
-    ["🎯 Picks +EV & Calendario", "📊 Auditoría & Explicación AI", "🧩 Parlays"]
-)
+    proj_l = f"{proyeccion['local']:.2f}" if proyeccion else "N/D"
+    proj_v = f"{proyeccion['visitante']:.2f}" if proyeccion else "N/D"
 
-with tab1:
-  st.subheader(f"📅 Picks Automatizados para la fecha: {fecha_seleccionada}")
-  picks_filtrados = [e for e in analisis_eventos if e["pick"]]
-
-  if picks_filtrados:
-    for ev in picks_filtrados:
-      p = ev["pick"]
-      logo_l = (
-          ev["logo_local"]
-          if ev["logo_local"]
-          else "https://via.placeholder.com/40"
-      )
-      logo_v = (
-          ev["logo_visitante"]
-          if ev["logo_visitante"]
-          else "https://via.placeholder.com/40"
-      )
-
-      st.markdown(f"""
-                <div class="card-partido">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <div>
-                            <span style="background-color: #3b82f6; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">{ev['liga']}</span>
-                            <h4 style="margin: 10px 0 5px 0; display: flex; align-items: center; gap: 10px;">
-                                <img src="{logo_l}" width="28" height="28"> {ev['local_nombre']} vs <img src="{logo_v}" width="28" height="28"> {ev['visitante_nombre']}
-                            </h4>
-                        </div>
-                        <div style="text-align: right;">
-                            <span style="color: #22c55e; font-weight: bold; font-size: 18px;">EV: +{p['ev']*100:.1f}%</span><br>
-                            <span style="color: #94a3b8; font-size: 13px;">Cuota: {p['cuota_americana']}</span>
-                        </div>
-                    </div>
-                    <hr style="border-color: #334155; margin: 10px 0;">
-                    <p style="margin: 0; font-size: 15px;">
-                        🔥 <b>Pick Sugerido para {casa_apuestas}:</b> <span style="color: #60a5fa;">{p['etiqueta']}</span> 
-                        | Probabilidad IA: <b>{p['prob_modelo']*100:.1f}%</b> 
-                        | Stake Sugerido (Kelly): <b>${p['kelly']*banco:.2f}</b>
-                    </p>
-                </div>
-            """, unsafe_allow_html=True)
-  else:
-    st.info(
-        "No se detectaron apuestas con valor positivo superior al umbral en la"
-        " fecha seleccionada. Cambia de fecha en el calendario lateral o ajusta"
-        " el edge mínimo."
-    )
-
-with tab2:
-  st.subheader("🔬 Auditoría de Modelos y Explicación Algorítmica")
-  if analisis_eventos:
-    seleccion_partido = st.selectbox(
-        "Elige un partido para auditar:", [e["partido"] for e in analisis_eventos]
-    )
-    match_sel = next(
-        e for e in analisis_eventos if e["partido"] == seleccion_partido
-    )
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-      st.metric(
-          "Expectativa Pitagórica",
-          f"{match_sel['pitagoras_local']*100:.1f}% vs"
-          f" {match_sel['pitagoras_visitante']*100:.1f}%",
-      )
-    with col2:
-      st.metric("Log5 H2H Ajustado", f"{match_sel['log5_local']*100:.1f}%")
-    with col3:
-      if match_sel["proyeccion"]:
-        st.metric(
-            "Marcador Proyectado",
-            f"{match_sel['proyeccion']['local']:.1f} -"
-            f" {match_sel['proyeccion']['total'] - match_sel['proyeccion']['local']:.1f}",
-        )
-      else:
-        st.metric("Marcador Proyectado", "N/D")
-
-    st.markdown("### 🤖 Reporte de Análisis Técnico de IA")
-    if match_sel["pick"]:
-      p_sel = match_sel["pick"]
-      st.success(
-          f"**Conclusión del Modelo:** El pick **{p_sel['etiqueta']}** presenta un"
-          f" rendimiento esperado (*EV*) de **+{p_sel['ev']*100:.1f}%**. Esto"
-          " se debe a que la probabilidad calculada por nuestros algoritmos"
-          f" (**{p_sel['prob_modelo']*100:.1f}%**) supera la cuota implícita de"
-          f" la casa de apuestas ({p_sel['cuota_americana']})."
-      )
-    else:
-      st.warning(
-          "Este evento no cuenta con un margen de valor (*Edge*) suficiente"
-          " frente a las líneas actuales de las casas de apuestas."
-      )
-  else:
-    st.warning("No hay partidos disponibles para desglosar.")
-
-with tab3:
-  st.subheader("🧩 Constructor de Parlays Científicos (+EV)")
-  picks_planos = []
-  for e in analisis_eventos:
-    for c in e["candidatos"]:
-      picks_planos.append(
-          {**c, "partido": e["partido"], "liga": e["liga"]}
-      )
-
-  if len(picks_planos) >= 3:
-    picks_planos.sort(key=lambda x: x["ev"], reverse=True)
-    patas = picks_planos[:3]
-
-    prob_comb = 1.0
-    cuota_comb = 1.0
-    nombres_patas = []
-    for pata in patas:
-      prob_comb *= pata["prob_modelo"]
-      cuota_comb *= pata["cuota_decimal"]
-      nombres_patas.append(f"{pata['etiqueta']} ({pata['partido']})")
-
-    ev_parlay = valor_esperado(prob_comb, cuota_comb)
-    stake_parlay = min(kelly(prob_comb, cuota_comb) * 0.25, 0.05) * banco
-
-    st.markdown(f"""
-            <div class="card-partido" style="border: 2px solid #3b82f6;">
-                <h3>🎯 Parlay Destacado de 3 Patas</h3>
-                <ul>
-                    <li><b>Patas:</b> { ' + '.join(nombres_patas) }</li>
-                </ul>
-                <hr style="border-color: #334155;">
-                <p><b>Probabilidad Combinada:</b> {prob_comb*100:.2f}% | <b>Cuota Total Decimal:</b> {cuota_comb:.2f}</p>
-                <p><b>Valor Esperado (EV):</b> <span style="color: #22c55e;">+{ev_parlay*100:.2f}%</span> | <b>Stake Sugerido:</b> ${stake_parlay:.2f}</p>
-            </div>
-        """, unsafe_allow_html=True)
-  else:
-    st.info(
-        "Se necesitan al menos 3 picks con valor positivo en la fecha elegida"
-        " para armar los parlays automáticos."
-    )
-
-st.markdown("---")
-st.caption(
-    "Piquis AI Engine · Arquitectura orientada a Draftea y Playdoit con"
-    " estadísticas de ESPN en tiempo real."
-)
+    explicacion_ia = (
+        f"🤖 **Análisis Cuantitativo de IA:** El modelo recomienda **{pick_principal['etiqueta']}** "
+        f"porque el algoritmo detectó un *Edge* matemático de **{edge_txt}** frente a la cuota "
+        f"de {casa_apuestas}. La Expectativa Pitagórica otorga un rendimiento de **{pit_l_txt}** para el local "
+        f"frente a **{pit_v_txt}** del visitante, ajustándose a un enfrentamiento directo por **Log5** del **{log5_txt}**. "
+        f"El marcador proyectado es de **{proj_l} a {proj_v}**, generando un Valor Esperado (**EV**) estimado en **{ev_txt}
