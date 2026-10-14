@@ -12,10 +12,7 @@ st.set_page_config(
 # Estilos CSS avanzados para una UI/UX ultra limpia, moderna y de nivel comercial
 st.markdown("""
     <style>
-    /* Estilos generales y fondo oscuro elegante */
     .main { background-color: #090d16; color: #f1f5f9; }
-    
-    /* Tarjetas de partidos y picks */
     .card-match {
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
         padding: 24px;
@@ -23,13 +20,8 @@ st.markdown("""
         margin-bottom: 20px;
         border: 1px solid #334155;
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-        transition: transform 0.2s ease;
     }
-    .card-match:hover {
-        border-color: #3b82f6;
-    }
-    
-    /* Cajas de IA / Explicación del modelo */
+    .card-match:hover { border-color: #3b82f6; }
     .ai-box {
         background-color: #111827;
         border-left: 4px solid #3b82f6;
@@ -38,14 +30,11 @@ st.markdown("""
         margin-top: 12px;
         font-size: 14px;
         color: #e2e8f0;
+        line-height: 1.5;
     }
-    
-    /* Insignias de mercados */
     .badge-ml { background-color: #3b82f6; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
     .badge-spread { background-color: #8b5cf6; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
     .badge-total { background-color: #f59e0b; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-    
-    /* Métricas estilizadas */
     .metric-container {
         background-color: #1e293b;
         padding: 12px;
@@ -56,7 +45,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Encabezado principal de la aplicación
+# Encabezado principal
 col_h1, col_h2 = st.columns([4, 1])
 with col_h1:
   st.markdown(
@@ -205,10 +194,8 @@ LEAGUES = [
     },
 ]
 
-# Sidebar Interactiva de Alta Gama
-st.sidebar.markdown(
-    "### 🎛️ Panel de Control"
-)
+# Sidebar Interactiva
+st.sidebar.markdown("### 🎛️ Panel de Control")
 fecha_seleccionada = st.sidebar.date_input(
     "📅 Calendario de Partidos", date.today()
 )
@@ -232,7 +219,7 @@ umbral_edge = (
 )
 
 
-# --- 2. FUNCIONES DE DESCARGA Y MATEMÁTICA ---
+# --- 2. FUNCIONES Y MATEMÁTICA ---
 def _num(value):
   if isinstance(value, (int, float)):
     return float(value)
@@ -314,373 +301,4 @@ def descargar_datos_fecha(f_str):
                 "spread_local_cuota": _num(
                     (
                         (point_spread.get("home") or {}).get("close") or {}
-                    ).get("odds")
-                ),
-                "spread_visitante_cuota": _num(
-                    (
-                        (point_spread.get("away") or {}).get("close") or {}
-                    ).get("odds")
-                ),
-                "total": _num(odds.get("overUnder")),
-                "over_cuota": _num(
-                    (
-                        (total.get("over") or {}).get("close") or {}
-                    ).get("odds")
-                ),
-                "under_cuota": _num(
-                    (
-                        (total.get("under") or {}).get("close") or {}
-                    ).get("odds")
-                ),
-            })
-    except Exception:
-      pass
-
-    try:
-      url_s = f"{STANDINGS_API}/{league['path']}/standings"
-      res_s = requests.get(url_s, timeout=10)
-      if res_s.ok:
-        pay_s = res_s.json()
-        entries = []
-        for child in pay_s.get("children", []):
-          entries.extend((child.get("standings") or {}).get("entries", []))
-        if not entries:
-          entries = (pay_s.get("standings") or {}).get("entries", [])
-
-        tabla = {}
-        for entry in entries:
-          stats = {
-              s.get("name"): s.get("value", 0) for s in entry.get("stats", [])
-          }
-          wins = stats.get("wins", 0) or 0
-          losses = stats.get("losses", 0) or 0
-          ties = stats.get("ties", 0) or 0
-          ot_losses = (
-              stats.get("otLosses", stats.get("overtimeLosses", 0)) or 0
-          )
-          gp = (
-              stats.get("gamesPlayed")
-              or stats.get("games")
-              or (wins + losses + ties + ot_losses)
-          )
-          team = entry.get("team") or {}
-          if not team.get("displayName"):
-            continue
-          tabla[team["displayName"].lower()] = {
-              "gp": gp,
-              "pf": stats.get("pointsFor", 0) or 0,
-              "pa": stats.get("pointsAgainst", 0) or 0,
-          }
-        tablas_totales[league["key"]] = tabla
-    except Exception:
-      pass
-
-  return partidos_totales, tablas_totales
-
-
-with st.spinner("Sincronizando cuotas en vivo y ejecutando modelos de IA..."):
-  partidos_crudos, tablas_datos = descargar_datos_fecha(fecha_str)
-
-
-# Fórmulas de modelado
-def pitagoras(pf, pa, exp):
-  if pf <= 0 and pa <= 0:
-    return None
-  if pf <= 0:
-    return 0.0
-  if pa <= 0:
-    return 1.0
-  return pf**exp / (pf**exp + pa**exp)
-
-
-def log5(p_a, p_b):
-  denom = p_a + p_b - 2 * p_a * p_b
-  if denom <= 0:
-    return None
-  return max(0.001, min(0.999, (p_a - p_a * p_b) / denom))
-
-
-def norm_cdf(z):
-  return 0.5 * (1 + math.erf(z / math.sqrt(2)))
-
-
-def promedio_liga(tabla):
-  valores = [
-      row["pf"] / row["gp"]
-      for row in tabla.values()
-      if row["gp"] > 0 and row["pf"] > 0
-  ]
-  return sum(valores) / len(valores) if valores else None
-
-
-def proyectar(local, visitante, promedio, hfa, neutral=False):
-  if not promedio or local["gp"] <= 0 or visitante["gp"] <= 0:
-    return None
-  ataque_local = local["pf"] / local["gp"]
-  defensa_local = local["pa"] / local["gp"] if local["pa"] > 0 else promedio
-  ataque_visitante = visitante["pf"] / visitante["gp"]
-  defensa_visitante = (
-      visitante["pa"] / visitante["gp"] if visitante["pa"] > 0 else promedio
-  )
-  ventaja = 0 if neutral else hfa
-  goles_local = (
-      promedio
-      * (ataque_local / promedio)
-      * (defensa_visitante / promedio)
-      + ventaja / 2
-  )
-  goles_visitante = (
-      promedio
-      * (ataque_visitante / promedio)
-      * (defensa_local / promedio)
-      - ventaja / 2
-  )
-  return {
-      "local": max(goles_local, 0),
-      "visitante": max(goles_visitante, 0),
-      "total": max(goles_local, 0) + max(goles_visitante, 0),
-      "margen": goles_local - goles_visitante,
-  }
-
-
-def poisson_pmf(lam, k):
-  return math.exp(-lam) * lam**k / math.factorial(k)
-
-
-def matriz_poisson(lam_local, lam_visitante, max_goles=10):
-  return [
-      [
-          poisson_pmf(max(lam_local, 0.05), i)
-          * poisson_pmf(max(lam_visitante, 0.05), j)
-          for j in range(max_goles + 1)
-      ]
-      for i in range(max_goles + 1)
-  ]
-
-
-def resultados_matriz(matriz):
-  local = sum(
-      matriz[i][j]
-      for i in range(len(matriz))
-      for j in range(len(matriz))
-      if i > j
-  )
-  empate = sum(
-      matriz[i][j]
-      for i in range(len(matriz))
-      for j in range(len(matriz))
-      if i == j
-  )
-  visitante = sum(
-      matriz[i][j]
-      for i in range(len(matriz))
-      for j in range(len(matriz))
-      if i < j
-  )
-  total = local + empate + visitante
-  if total == 0:
-    return {"local": 0.33, "empate": 0.34, "visitante": 0.33}
-  return {
-      "local": local / total,
-      "empate": empate / total,
-      "visitante": visitante / total,
-  }
-
-
-def prob_over(matriz, linea):
-  total = sum(sum(row) for row in matriz)
-  if total == 0:
-    return 0.5
-  over = sum(
-      matriz[i][j]
-      for i in range(len(matriz))
-      for j in range(len(matriz))
-      if i + j > linea
-  )
-  return over / total
-
-
-def americana_a_decimal(americana):
-  if not americana:
-    return None
-  return 1 + americana / 100 if americana > 0 else 1 + 100 / abs(americana)
-
-
-def valor_esperado(p, decimal):
-  return p * (decimal - 1) - (1 - p) if decimal and decimal > 1 else 0
-
-
-def kelly(p, decimal):
-  if not decimal or decimal <= 1:
-    return 0
-  b = decimal - 1
-  return max(0.0, (p * b - (1 - p)) / b)
-
-
-# Procesamiento del motor de análisis
-analisis_eventos = []
-for p in partidos_crudos:
-  league = next(
-      (item for item in LEAGUES if item["key"] == p["league_key"]), None
-  )
-  if not league:
-    continue
-  if deporte_filtro != "Todas las Ligas" and league["name"] != deporte_filtro:
-    continue
-
-  tabla = tablas_datos.get(p["league_key"], {})
-  local = tabla.get((p["local"] or "").lower(), {"gp": 1, "pf": 1, "pa": 1})
-  visitante = tabla.get(
-      (p["visitante"] or "").lower(), {"gp": 1, "pf": 1, "pa": 1}
-  )
-
-  p_pit_l = (
-      pitagoras(local["pf"] / local["gp"], local["pa"] / local["gp"], league["exp"])
-      if local["gp"] > 0
-      else 0.5
-  )
-  p_pit_v = (
-      pitagoras(
-          visitante["pf"] / visitante["gp"],
-          visitante["pa"] / visitante["gp"],
-          league["exp"],
-      )
-      if visitante["gp"] > 0
-      else 0.5
-  )
-  promedio = promedio_liga(tabla) or 1.2
-
-  neutral_log5 = log5(p_pit_l, p_pit_v) if p_pit_l and p_pit_v else 0.5
-  proyeccion = proyectar(
-      local, visitante, promedio, league["hfa"], p["sede_neutral"]
-  )
-
-  if league["model"] == "points" and proyeccion:
-    sigma = league.get("sigma", 10.0)
-    desde_proyeccion = norm_cdf(proyeccion["margen"] / sigma)
-    p_modelo_local = (
-        (neutral_log5 + desde_proyeccion) / 2
-        if neutral_log5
-        else desde_proyeccion
-    )
-    p_modelo_empate = None
-    p_modelo_visitante = 1 - p_modelo_local
-  elif proyeccion:
-    matriz = matriz_poisson(proyeccion["local"], proyeccion["visitante"])
-    res = resultados_matriz(matriz)
-    p_modelo_empate = res["empate"]
-    decisivos = res["local"] + res["visitante"]
-    split_m = res["local"] / decisivos if decisivos else 0.5
-    mezcla = 0.35 * (neutral_log5 or 0.5) + 0.65 * split_m
-    p_modelo_local = (1 - p_modelo_empate) * mezcla
-    p_modelo_visitante = (1 - p_modelo_empate) * (1 - mezcla)
-  else:
-    p_modelo_local, p_modelo_empate, p_modelo_visitante = 0.45, 0.20, 0.35
-
-  candidatos = []
-
-
-  def agregar(mercado, seleccion, etiqueta, prob, cuota_americana):
-    decimal = americana_a_decimal(cuota_americana)
-    if not decimal:
-      return
-    ev_val = valor_esperado(prob, decimal)
-    kelly_val = kelly(prob, decimal)
-    edge = prob - (1 / decimal)
-    if edge >= umbral_edge:
-      candidatos.append({
-          "mercado": mercado,
-          "seleccion": seleccion,
-          "etiqueta": etiqueta,
-          "prob_modelo": prob,
-          "cuota_decimal": decimal,
-          "cuota_americana": cuota_americana,
-          "edge": edge,
-          "ev": ev_val,
-          "kelly": kelly_val,
-      })
-
-
-  agregar(
-      "ML",
-      "local",
-      f"Gana {p['local_corto'] or p['local']}",
-      p_modelo_local,
-      p.get("ml_local"),
-  )
-  agregar(
-      "ML",
-      "visitante",
-      f"Gana {p['visitante_corto'] or p['visitante']}",
-      p_modelo_visitante,
-      p.get("ml_visitante"),
-  )
-  if p_modelo_empate and p.get("ml_empate"):
-    agregar("1X2", "empate", "Empate", p_modelo_empate, p.get("ml_empate"))
-
-  if (
-      league["model"] == "points"
-      and proyeccion
-      and p.get("spread_local") is not None
-  ):
-    linea = p["spread_local"]
-    sigma = league.get("sigma", 10.0)
-    cubre = norm_cdf((proyeccion["margen"] + linea) / sigma)
-    agregar(
-        "Spread",
-        "local",
-        f"{p['local_corto']} {linea:+}",
-        cubre,
-        p.get("spread_local_cuota"),
-    )
-    agregar(
-        "Spread",
-        "visitante",
-        f"{p['visitante_corto']} {-linea:+}",
-        1 - cubre,
-        p.get("spread_visitante_cuota"),
-    )
-
-  if p.get("total") and proyeccion:
-    if league["model"] == "points":
-      sigma_t = league.get("sigma_total", 12.0)
-      over = 1 - norm_cdf((p["total"] - proyeccion["total"]) / sigma_t)
-    else:
-      over = prob_over(
-          matriz_poisson(proyeccion["local"], proyeccion["visitante"]),
-          p["total"],
-      )
-    agregar(
-        "Total", "over", f"Más de {p['total']}", over, p.get("over_cuota")
-    )
-    agregar(
-        "Total",
-        "under",
-        f"Menos de {p['total']}",
-        1 - over,
-        p.get("under_cuota"),
-    )
-
-  candidatos.sort(key=lambda c: c["ev"], reverse=True)
-
-  # Generador de explicación automatizada de IA basada en los datos cuantitativos
-  pick_principal = candidatos[0] if candidatos else None
-  explicacion_ia = ""
-  if pick_principal:
-    mercado_txt = pick_principal["mercado"]
-    prob_txt = f"{pick_principal['prob_modelo']*100:.1f}%"
-    edge_txt = f"+{pick_principal['edge']*100:.1f}%"
-    ev_txt = f"+{pick_principal['ev']*100:.1f}%"
-    pit_l_txt = f"{p_pit_l*100:.1f}%"
-    pit_v_txt = f"{p_pit_v*100:.1f}%"
-    log5_txt = f"{neutral_log5*100:.1f}%"
-
-    proj_l = f"{proyeccion['local']:.2f}" if proyeccion else "N/D"
-    proj_v = f"{proyeccion['visitante']:.2f}" if proyeccion else "N/D"
-
-    explicacion_ia = (
-        f"🤖 **Análisis Cuantitativo de IA:** El modelo recomienda **{pick_principal['etiqueta']}** "
-        f"porque el algoritmo detectó un *Edge* matemático de **{edge_txt}** frente a la cuota "
-        f"de {casa_apuestas}. La Expectativa Pitagórica otorga un rendimiento de **{pit_l_txt}** para el local "
-        f"frente a **{pit_v_txt}** del visitante, ajustándose a un enfrentamiento directo por **Log5** del **{log5_txt}**. "
-        f"El marcador proyectado es de **{proj_l} a {proj_v}**, generando un Valor Esperado (**EV**) estimado en **{ev_txt}
+                    ).get("
