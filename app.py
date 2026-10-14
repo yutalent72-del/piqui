@@ -659,17 +659,22 @@ for p in partidos_crudos:
     proj_v = f"{proyeccion['visitante']:.2f}" if proyeccion else "N/D"
 
     explicacion_ia = (
-        f"🤖 **Razonamiento de IA:** El modelo recomienda **{pick_principal['etiqueta']}** "
-        f"porque el algoritmo detectó un *Edge* matemático de **{edge_txt}** frente a la cuota "
-        f"de {casa_apuestas}. La Expectativa Pitagórica otorga un rendimiento de **{pit_l_txt}** para el local "
-        f"frente a **{pit_v_txt}** del visitante, ajustándose a un enfrentamiento directo por **Log5** del **{log5_txt}**. "
-        f"El marcador proyectado es de **{proj_l} a {proj_v}**, generando un Valor Esperado (**EV**) estimado en **{ev_txt}**."
+        f"🤖 **Razonamiento de IA:** El modelo recomienda"
+        f" **{pick_principal['etiqueta']}** porque el algoritmo detectó un"
+        f" *Edge* matemático de **{edge_txt}** frente a la cuota de"
+        f" {casa_apuestas}. La Expectativa Pitagórica otorga un rendimiento de"
+        f" **{pit_l_txt}** para el local frente a **{pit_v_txt}** del visitante,"
+        f" ajustándose a un enfrentamiento directo por **Log5** del"
+        f" **{log5_txt}**. El marcador proyectado es de **{proj_l} a"
+        f" {proj_v}**, generando un Valor Esperado (**EV**) estimado en"
+        f" **{ev_txt}**."
     )
   else:
     explicacion_ia = (
-        "🤖 **Razonamiento de IA:** Las líneas actuales de la casa de apuestas "
-        f"en {casa_apuestas} se encuentran alineadas eficientemente con las proyecciones estadísticas. "
-        "No existe suficiente discrepancia de valor (*Edge*) para justificar una inversión."
+        "🤖 **Razonamiento de IA:** Las líneas actuales de la casa de apuestas"
+        f" en {casa_apuestas} se encuentran alineadas eficientemente con las"
+        " proyecciones estadísticas. No existe suficiente discrepancia de valor"
+        " (*Edge*) para justificar una inversión."
     )
 
   analisis_eventos.append({
@@ -798,4 +803,70 @@ with tab2:
       )
 
     st.markdown("---")
-    st.markdown("####
+    st.markdown("#### 💬 Informe Completo de Razonamiento del Modelo")
+    st.markdown(
+        f"<div class='ai-box' style='font-size: 16px; line-height:"
+        f" 1.6;'>{match_sel['explicacion']}</div>",
+        unsafe_allow_html=True,
+    )
+  else:
+    st.warning("No hay eventos disponibles para auditar en esta fecha.")
+
+with tab3:
+  st.markdown("### 🧩 Constructor Inteligente de Parlays (+EV)")
+  picks_planos = []
+  for e in analisis_eventos:
+    for c in e["candidatos"]:
+      picks_planos.append(
+          {**c, "partido": e["partido"], "liga": e["liga"]}
+      )
+
+  if len(picks_planos) >= 3:
+    picks_planos.sort(key=lambda x: x["ev"], reverse=True)
+    patas = picks_planos[:3]
+
+    prob_comb = 1.0
+    cuota_comb = 1.0
+    nombres_patas = []
+    for pata in patas:
+      prob_comb *= pata["prob_modelo"]
+      cuota_comb *= pata["cuota_decimal"]
+      nombres_patas.append(f"<b>{pata['etiqueta']}</b> ({pata['partido']})")
+
+    ev_parlay = valor_esperado(prob_comb, cuota_comb)
+    stake_parlay = min(kelly(prob_comb, cuota_comb) * 0.25, 0.05) * banco
+
+    st.markdown(f"""
+            <div class="card-match" style="border: 2px solid #3b82f6;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>🔥 Parlay Científico Combinado (3 Patas)</h3>
+                    <span style="background-color: #22c55e20; color: #22c55e; padding: 4px 12px; border-radius: 20px; font-weight: bold;">EV: +{ev_parlay*100:.2f}%</span>
+                </div>
+                <ul style="margin: 15px 0; padding-left: 20px; line-height: 1.8;">
+                    <li>{'</li><li>'.join(nombres_patas)}</li>
+                </ul>
+                <hr style="border-color: #334155;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <div>
+                        Probabilidad Combinada: <b style="color: #60a5fa;">{prob_comb*100:.2f}%</b> &nbsp;|&nbsp; Cuota Total: <b style="color: #f1f5f9;">{cuota_comb:.2f}</b>
+                    </div>
+                    <div>
+                        Stake Sugerido sobre ${banco:.0f}: <b style="color: #22c55e;">${stake_parlay:.2f}</b>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+  else:
+    st.info(
+        "💡 Se requieren al menos 3 selecciones con valor positivo en la fecha"
+        " seleccionada para calcular automáticamente los parlays de alta"
+        " eficiencia."
+    )
+
+st.markdown("---")
+st.markdown(
+    "<div style='text-align: center; color: #64748b; font-size: 13px;'>Piquis"
+    " AI Engine · Desarrollado exclusivamente para Eloy Zambrano con datos en"
+    " tiempo real. El juego responsable es fundamental.</div>",
+    unsafe_allow_html=True,
+)
