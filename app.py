@@ -1,3 +1,4 @@
+from datetime import date, datetime, timezone
 import math
 import pandas as pd
 import requests
@@ -5,12 +6,21 @@ import streamlit as st
 
 # Configuración de la página web
 st.set_page_config(
-    page_title="Piquis · Analista Deportivo & Modelos AI", page_icon="⚡", layout="wide"
+    page_title="Piquis · AI Sports Analytics", page_icon="⚡", layout="wide"
 )
 
-st.title("🤖 Piquis · Analista Deportivo con Modelos Estadísticos")
+# Estilos CSS personalizados para una UX moderna y limpia
+st.markdown("""
+    <style>
+    .main { background-color: #0f172a; color: #f8fafc; }
+    .stMetric { background-color: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155; }
+    .card-partido { background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #334155; }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("⚡ Piquis · Analista Deportivo & Modelos AI")
 st.markdown(
-    "WebApp conectada a modelos cuantitativos: **Pitágoras, Log5, Ventaja Local, Proyecciones de Goles/Puntos, Spread, Totales y Parlays con Criterio de Kelly** orientada a **Draftea y Playdoit**."
+    "Plataforma cuantitativa avanzada: **Pitágoras, Log5, Ventaja Local, Proyecciones, Spreads, Totales y Criterio de Kelly** optimizada para **Draftea y Playdoit**."
 )
 
 # --- 1. CONFIGURACIÓN DE LIGAS Y MERCADOS ---
@@ -25,7 +35,6 @@ LEAGUES = [
         "exp": 1.7,
         "hfa": 0.32,
         "model": "poisson",
-        "unit": "goles",
     },
     {
         "key": "uefa.europa",
@@ -34,7 +43,6 @@ LEAGUES = [
         "exp": 1.7,
         "hfa": 0.32,
         "model": "poisson",
-        "unit": "goles",
     },
     {
         "key": "mex.1",
@@ -43,7 +51,6 @@ LEAGUES = [
         "exp": 1.7,
         "hfa": 0.38,
         "model": "poisson",
-        "unit": "goles",
     },
     {
         "key": "usa.1",
@@ -52,7 +59,6 @@ LEAGUES = [
         "exp": 1.7,
         "hfa": 0.35,
         "model": "poisson",
-        "unit": "goles",
     },
     {
         "key": "mlb",
@@ -61,7 +67,6 @@ LEAGUES = [
         "exp": 1.83,
         "hfa": 0.24,
         "model": "points",
-        "unit": "carreras",
         "sigma": 1.4,
         "sigma_total": 1.6,
     },
@@ -72,7 +77,6 @@ LEAGUES = [
         "exp": 1.83,
         "hfa": 0.24,
         "model": "points",
-        "unit": "carreras",
         "sigma": 1.5,
         "sigma_total": 1.7,
     },
@@ -83,7 +87,6 @@ LEAGUES = [
         "exp": 13.91,
         "hfa": 2.6,
         "model": "points",
-        "unit": "pts",
         "sigma": 11.5,
         "sigma_total": 18.0,
     },
@@ -94,7 +97,6 @@ LEAGUES = [
         "exp": 11.5,
         "hfa": 3.1,
         "model": "points",
-        "unit": "pts",
         "sigma": 10.5,
         "sigma_total": 15.0,
     },
@@ -105,7 +107,6 @@ LEAGUES = [
         "exp": 2.37,
         "hfa": 1.9,
         "model": "points",
-        "unit": "pts",
         "sigma": 13.8,
         "sigma_total": 13.5,
     },
@@ -116,7 +117,6 @@ LEAGUES = [
         "exp": 2.6,
         "hfa": 2.5,
         "model": "points",
-        "unit": "pts",
         "sigma": 14.5,
         "sigma_total": 16.0,
     },
@@ -127,7 +127,6 @@ LEAGUES = [
         "exp": 1.9,
         "hfa": 0.16,
         "model": "poisson",
-        "unit": "goles",
     },
     {
         "key": "ufc",
@@ -136,7 +135,6 @@ LEAGUES = [
         "exp": 1.5,
         "hfa": 0.0,
         "model": "points",
-        "unit": "pts",
         "sigma": 1.0,
         "sigma_total": 1.0,
     },
@@ -147,29 +145,35 @@ LEAGUES = [
         "exp": 1.5,
         "hfa": 0.0,
         "model": "points",
-        "unit": "sets",
         "sigma": 1.0,
         "sigma_total": 1.0,
     },
 ]
 
-# Sidebar de configuración
-st.sidebar.header("⚙️ Opciones de Apuesta")
+# Sidebar Interactiva (Calendario y Filtros UX)
+st.sidebar.header("📅 Calendario & Filtros")
+fecha_seleccionada = st.sidebar.date_input(
+    "Selecciona Fecha de Análisis", date.today()
+)
+fecha_str = fecha_seleccionada.strftime("%Y%m%d")
+
+deportes_disponibles = ["Todos"] + [l["name"] for l in LEAGUES]
+deporte_filtro = st.sidebar.selectbox("Filtrar por Liga / Deporte", deportes_disponibles)
+
+st.sidebar.markdown("---")
+st.sidebar.header("⚙️ Gestión de Bankroll")
 casa_apuestas = st.sidebar.selectbox(
     "Casa de Apuestas Objetivo:", ["Playdoit", "Draftea"]
 )
-banco = st.sidebar.number_input("Bankroll Inicial ($)", value=1000.0, step=100.0)
+banco = st.sidebar.number_input(
+    "Bankroll Inicial ($)", value=1000.0, step=100.0, format="%.2f"
+)
 umbral_edge = (
-    st.sidebar.slider("Edge Mínimo Requerido (%)", 1.0, 10.0, 2.0, 0.5) / 100.0
-)
-
-st.sidebar.markdown("---")
-st.sidebar.info(
-    "💡 *Nota:* Si alguna liga no tiene partidos programados para hoy en la API pública de ESPN, se mostrará limpia para evitar errores."
+    st.sidebar.slider("Edge Mínimo Requerido (%)", 0.5, 10.0, 1.5, 0.5) / 100.0
 )
 
 
-# --- 2. FUNCIONES DE DESCARGA Y MODELADO MATEMÁTICO ---
+# --- 2. FUNCIONES DE DESCARGA Y MATEMÁTICA ---
 def _num(value):
   if isinstance(value, (int, float)):
     return float(value)
@@ -182,124 +186,146 @@ def _num(value):
   return None
 
 
-@st.cache_data(ttl=600)
-def descargar_partidos_liga(league):
-  try:
-    url = f"{SITE_API}/{league['path']}/scoreboard"
-    response = requests.get(url, params={"limit": 100}, timeout=10)
-    if not response.ok:
-      return []
-    payload = response.json()
-    partidos = []
-    for event in payload.get("events", []):
-      for competition in event.get("competitions", []):
-        competitors = competition.get("competitors", [])
-        if len(competitors) < 2:
-          continue
-        home = next(
-            (c for c in competitors if c.get("homeAway") == "home"),
-            competitors[0],
-        )
-        away = next(
-            (c for c in competitors if c.get("homeAway") == "away"),
-            competitors[1],
-        )
-        odds = (competition.get("odds") or [{}])[0]
-        moneyline = odds.get("moneyline", {})
-        point_spread = odds.get("pointSpread", {})
-        total = odds.get("total", {})
-
-        partidos.append({
-            "id": competition.get("id"),
-            "liga": league["name"],
-            "league_key": league["key"],
-            "inicio": competition.get("date"),
-            "local": (home.get("team") or {}).get("displayName"),
-            "visitante": (away.get("team") or {}).get("displayName"),
-            "local_corto": (home.get("team") or {}).get("shortDisplayName"),
-            "visitante_corto": (away.get("team") or {}).get("shortDisplayName"),
-            "sede_neutral": bool(competition.get("neutralSite")),
-            "ml_local": _num(
-                (((moneyline.get("home") or {}).get("close") or {}).get("odds"))
-            ),
-            "ml_visitante": _num(
-                (((moneyline.get("away") or {}).get("close") or {}).get("odds"))
-            ),
-            "ml_empate": _num(
-                (((moneyline.get("draw") or {}).get("close") or {}).get("odds"))
-            ),
-            "spread_local": _num(
-                (
-                    (point_spread.get("home") or {}).get("close") or {}
-                ).get("line")
-            ),
-            "spread_local_cuota": _num(
-                (
-                    (point_spread.get("home") or {}).get("close") or {}
-                ).get("odds")
-            ),
-            "spread_visitante_cuota": _num(
-                (
-                    (point_spread.get("away") or {}).get("close") or {}
-                ).get("odds")
-            ),
-            "total": _num(odds.get("overUnder")),
-            "over_cuota": _num(
-                (((total.get("over") or {}).get("close") or {}).get("odds"))
-            ),
-            "under_cuota": _num(
-                (((total.get("under") or {}).get("close") or {}).get("odds"))
-            ),
-        })
-    return partidos
-  except Exception:
-    return []
-
-
-@st.cache_data(ttl=600)
-def descargar_posiciones_liga(league):
-  try:
-    url = f"{STANDINGS_API}/{league['path']}/standings"
-    response = requests.get(url, timeout=10)
-    if not response.ok:
-      return {}
-    payload = response.json()
-    entries = []
-    for child in payload.get("children", []):
-      entries.extend((child.get("standings") or {}).get("entries", []))
-    if not entries:
-      entries = (payload.get("standings") or {}).get("entries", [])
-
-    tabla = {}
-    for entry in entries:
-      stats = {s.get("name"): s.get("value", 0) for s in entry.get("stats", [])}
-      wins = stats.get("wins", 0) or 0
-      losses = stats.get("losses", 0) or 0
-      ties = stats.get("ties", 0) or 0
-      ot_losses = (
-          stats.get("otLosses", stats.get("overtimeLosses", 0)) or 0
+@st.cache_data(ttl=300)
+def descargar_datos_fecha(f_str):
+  partidos_totales = []
+  tablas_totales = {}
+  for league in LEAGUES:
+    try:
+      # Scoreboard con fecha específica
+      url = f"{SITE_API}/{league['path']}/scoreboard"
+      response = requests.get(
+          url, params={"dates": f_str, "limit": 100}, timeout=10
       )
-      gp = (
-          stats.get("gamesPlayed")
-          or stats.get("games")
-          or (wins + losses + ties + ot_losses)
-      )
-      team = entry.get("team") or {}
-      if not team.get("displayName"):
-        continue
-      tabla[team["displayName"].lower()] = {
-          "gp": gp,
-          "pf": stats.get("pointsFor", 0) or 0,
-          "pa": stats.get("pointsAgainst", 0) or 0,
-          "wins": wins,
-          "losses": losses,
-      }
-    return tabla
-  except Exception:
-    return {}
+      if response.ok:
+        payload = response.json()
+        for event in payload.get("events", []):
+          for competition in event.get("competitions", []):
+            competitors = competition.get("competitors", [])
+            if len(competitors) < 2:
+              continue
+            home = next(
+                (c for c in competitors if c.get("homeAway") == "home"),
+                competitors[0],
+            )
+            away = next(
+                (c for c in competitors if c.get("homeAway") == "away"),
+                competitors[1],
+            )
+
+            team_h = home.get("team") or {}
+            team_a = away.get("team") or {}
+
+            odds = (competition.get("odds") or [{}])[0]
+            moneyline = odds.get("moneyline", {})
+            point_spread = odds.get("pointSpread", {})
+            total = odds.get("total", {})
+
+            partidos_totales.append({
+                "id": competition.get("id"),
+                "liga": league["name"],
+                "league_key": league["key"],
+                "inicio": competition.get("date"),
+                "local": team_h.get("displayName"),
+                "visitante": team_a.get("displayName"),
+                "local_corto": team_h.get("shortDisplayName"),
+                "visitante_corto": team_a.get("shortDisplayName"),
+                "logo_local": team_h.get("logo"),
+                "logo_visitante": team_a.get("logo"),
+                "sede_neutral": bool(competition.get("neutralSite")),
+                "ml_local": _num(
+                    (
+                        (moneyline.get("home") or {}).get("close") or {}
+                    ).get("odds")
+                ),
+                "ml_visitante": _num(
+                    (
+                        (moneyline.get("away") or {}).get("close") or {}
+                    ).get("odds")
+                ),
+                "ml_empate": _num(
+                    (
+                        (moneyline.get("draw") or {}).get("close") or {}
+                    ).get("odds")
+                ),
+                "spread_local": _num(
+                    (
+                        (point_spread.get("home") or {}).get("close") or {}
+                    ).get("line")
+                ),
+                "spread_local_cuota": _num(
+                    (
+                        (point_spread.get("home") or {}).get("close") or {}
+                    ).get("odds")
+                ),
+                "spread_visitante_cuota": _num(
+                    (
+                        (point_spread.get("away") or {}).get("close") or {}
+                    ).get("odds")
+                ),
+                "total": _num(odds.get("overUnder")),
+                "over_cuota": _num(
+                    (
+                        (total.get("over") or {}).get("close") or {}
+                    ).get("odds")
+                ),
+                "under_cuota": _num(
+                    (
+                        (total.get("under") or {}).get("close") or {}
+                    ).get("odds")
+                ),
+            })
+    except Exception:
+      pass
+
+    # Descargar Standings para modelos Pitagóricos
+    try:
+      url_s = f"{STANDINGS_API}/{league['path']}/standings"
+      res_s = requests.get(url_s, timeout=10)
+      if res_s.ok:
+        pay_s = res_s.json()
+        entries = []
+        for child in pay_s.get("children", []):
+          entries.extend((child.get("standings") or {}).get("entries", []))
+        if not entries:
+          entries = (pay_s.get("standings") or {}).get("entries", [])
+
+        tabla = {}
+        for entry in entries:
+          stats = {
+              s.get("name"): s.get("value", 0) for s in entry.get("stats", [])
+          }
+          wins = stats.get("wins", 0) or 0
+          losses = stats.get("losses", 0) or 0
+          ties = stats.get("ties", 0) or 0
+          ot_losses = (
+              stats.get("otLosses", stats.get("overtimeLosses", 0)) or 0
+          )
+          gp = (
+              stats.get("gamesPlayed")
+              or stats.get("games")
+              or (wins + losses + ties + ot_losses)
+          )
+          team = entry.get("team") or {}
+          if not team.get("displayName"):
+            continue
+          tabla[team["displayName"].lower()] = {
+              "gp": gp,
+              "pf": stats.get("pointsFor", 0) or 0,
+              "pa": stats.get("pointsAgainst", 0) or 0,
+          }
+        tablas_totales[league["key"]] = tabla
+    except Exception:
+      pass
+
+  return partidos_totales, tablas_totales
 
 
-# Fórmulas de modelado
+with st.spinner(f"Analizando agenda y cuotas para el {fecha_seleccionada}..."):
+  partidos_crudos, tablas_datos = descargar_datos_fecha(fecha_str)
+
+
+# Fórmulas
 def pitagoras(pf, pa, exp):
   if pf <= 0 and pa <= 0:
     return None
@@ -423,16 +449,6 @@ def americana_a_decimal(americana):
   return 1 + americana / 100 if americana > 0 else 1 + 100 / abs(americana)
 
 
-def implicita(cuota_americana):
-  decimal = americana_a_decimal(cuota_americana)
-  return 1 / decimal if decimal else None
-
-
-def quitar_vig(probabilidades):
-  total = sum(probabilidades)
-  return [p / total for p in probabilities] if total else probabilidades
-
-
 def valor_esperado(p, decimal):
   return p * (decimal - 1) - (1 - p) if decimal and decimal > 1 else 0
 
@@ -444,32 +460,21 @@ def kelly(p, decimal):
   return max(0.0, (p * b - (1 - p)) / b)
 
 
-# --- 3. CARGA Y PROCESAMIENTO DE DATOS EN VIVO ---
-with st.spinner(
-    "Descargando estadísticas en vivo, rosters y calculando algoritmos de IA..."
-):
-  partidos_totales = []
-  tablas_totales = {}
-  for league in LEAGUES:
-    p_liga = descargar_partidos_liga(league)
-    t_liga = descargar_posiciones_liga(league)
-    if p_liga:
-      partidos_totales.extend(p_liga)
-    if t_liga:
-      tablas_totales[league["key"]] = t_liga
-
-
-def analizar_partido(partido):
+# Procesamiento del motor de análisis
+analisis_eventos = []
+for p in partidos_crudos:
   league = next(
-      (item for item in LEAGUES if item["key"] == partido["league_key"]), None
+      (item for item in LEAGUES if item["key"] == p["league_key"]), None
   )
-  tabla = tablas_totales.get(partido["league_key"], {})
   if not league:
-    return None
+    continue
+  if deporte_filtro != "Todos" and league["name"] != deporte_filtro:
+    continue
 
-  local = tabla.get((partido["local"] or "").lower(), {"gp": 1, "pf": 1, "pa": 1})
+  tabla = tablas_datos.get(p["league_key"], {})
+  local = tabla.get((p["local"] or "").lower(), {"gp": 1, "pf": 1, "pa": 1})
   visitante = tabla.get(
-      (partido["visitante"] or "").lower(), {"gp": 1, "pf": 1, "pa": 1}
+      (p["visitante"] or "").lower(), {"gp": 1, "pf": 1, "pa": 1}
   )
 
   p_pit_l = (
@@ -490,10 +495,9 @@ def analizar_partido(partido):
 
   neutral_log5 = log5(p_pit_l, p_pit_v) if p_pit_l and p_pit_v else 0.5
   proyeccion = proyectar(
-      local, visitante, promedio, league["hfa"], partido["sede_neutral"]
+      local, visitante, promedio, league["hfa"], p["sede_neutral"]
   )
 
-  # Modelo final de probabilidades
   if league["model"] == "points" and proyeccion:
     sigma = league.get("sigma", 10.0)
     desde_proyeccion = norm_cdf(proyeccion["margen"] / sigma)
@@ -518,6 +522,7 @@ def analizar_partido(partido):
 
   candidatos = []
 
+
   def agregar(mercado, seleccion, etiqueta, prob, cuota_americana):
     decimal = americana_a_decimal(cuota_americana)
     if not decimal:
@@ -538,155 +543,226 @@ def analizar_partido(partido):
           "kelly": kelly_val,
       })
 
+
   agregar(
       "ML",
       "local",
-      f"Gana {partido['local_corto'] or partido['local']}",
+      f"Gana {p['local_corto'] or p['local']}",
       p_modelo_local,
-      partido.get("ml_local"),
+      p.get("ml_local"),
   )
   agregar(
       "ML",
       "visitante",
-      f"Gana {partido['visitante_corto'] or partido['visitante']}",
+      f"Gana {p['visitante_corto'] or p['visitante']}",
       p_modelo_visitante,
-      partido.get("ml_visitante"),
+      p.get("ml_visitante"),
   )
-  if p_modelo_empate and partido.get("ml_empate"):
-    agregar(
-        "1X2", "empate", "Empate", p_modelo_empate, partido.get("ml_empate")
-    )
+  if p_modelo_empate and p.get("ml_empate"):
+    agregar("1X2", "empate", "Empate", p_modelo_empate, p.get("ml_empate"))
 
   if (
       league["model"] == "points"
       and proyeccion
-      and partido.get("spread_local") is not None
+      and p.get("spread_local") is not None
   ):
-    linea = partido["spread_local"]
+    linea = p["spread_local"]
     sigma = league.get("sigma", 10.0)
     cubre = norm_cdf((proyeccion["margen"] + linea) / sigma)
     agregar(
         "Spread",
         "local",
-        f"{partido['local_corto']} {linea:+}",
+        f"{p['local_corto']} {linea:+}",
         cubre,
-        partido.get("spread_local_cuota"),
+        p.get("spread_local_cuota"),
     )
     agregar(
         "Spread",
         "visitante",
-        f"{partido['visitante_corto']} {-linea:+}",
+        f"{p['visitante_corto']} {-linea:+}",
         1 - cubre,
-        partido.get("spread_visitante_cuota"),
+        p.get("spread_visitante_cuota"),
     )
 
-  if partido.get("total") and proyeccion:
+  if p.get("total") and proyeccion:
     if league["model"] == "points":
       sigma_t = league.get("sigma_total", 12.0)
-      over = 1 - norm_cdf(
-          (partido["total"] - proyeccion["total"]) / sigma_t
-      )
+      over = 1 - norm_cdf((p["total"] - proyeccion["total"]) / sigma_t)
     else:
       over = prob_over(
           matriz_poisson(proyeccion["local"], proyeccion["visitante"]),
-          partido["total"],
+          p["total"],
       )
     agregar(
-        "Total",
-        "over",
-        f"Más de {partido['total']}",
-        over,
-        partido.get("over_cuota"),
+        "Total", "over", f"Más de {p['total']}", over, p.get("over_cuota")
     )
     agregar(
         "Total",
         "under",
-        f"Menos de {partido['total']}",
+        f"Menos de {p['total']}",
         1 - over,
-        partido.get("under_cuota"),
+        p.get("under_cuota"),
     )
 
   candidatos.sort(key=lambda c: c["ev"], reverse=True)
 
-  return {
-      "partido": f"{partido['local']} vs {partido['visitante']}",
+  analisis_eventos.append({
+      "partido": f"{p['local']} vs {p['visitante']}",
       "liga": league["name"],
+      "logo_local": p["logo_local"],
+      "logo_visitante": p["logo_visitante"],
+      "local_nombre": p["local"],
+      "visitante_nombre": p["visitante"],
       "pitagoras_local": p_pit_l,
       "pitagoras_visitante": p_pit_v,
       "log5_local": neutral_log5,
       "proyeccion": proyeccion,
       "pick": candidatos[0] if candidatos else None,
       "candidatos": candidatos,
-  }
+  })
 
+# --- 3. PESTAÑAS DE NAVEGACIÓN UX ---
+tab1, tab2, tab3 = st.tabs(
+    ["🎯 Picks +EV & Calendario", "📊 Auditoría & Explicación AI", "🧩 Parlays"]
+)
 
-analisis = [
-    a for a in (analizar_partido(p) for p in partidos_totales) if a and a["pick"]
-]
+with tab1:
+  st.subheader(f"📅 Picks Automatizados para la fecha: {fecha_seleccionada}")
+  picks_filtrados = [e for e in analisis_eventos if e["pick"]]
 
-# --- 4. INTERFAZ GRÁFICA EN STREAMLIT ---
-st.subheader("🎯 Panel de Picks Inteligentes (+EV)")
+  if picks_filtrados:
+    for ev in picks_filtrados:
+      p = ev["pick"]
+      logo_l = (
+          ev["logo_local"]
+          if ev["logo_local"]
+          else "https://via.placeholder.com/40"
+      )
+      logo_v = (
+          ev["logo_visitante"]
+          if ev["logo_visitante"]
+          else "https://via.placeholder.com/40"
+      )
 
-if analisis:
-  filas = []
-  for a in analisis:
-    pick = a["pick"]
-    filas.append({
-        "Liga": a["liga"],
-        "Partido": a["partido"],
-        "Mercado": pick["mercado"],
-        "Pick Sugerido": pick["etiqueta"],
-        "Cuota": pick["cuota_americana"],
-        "Prob. IA %": round(pick["prob_modelo"] * 100, 1),
-        "Edge %": round(pick["edge"] * 100, 1),
-        "EV %": round(pick["ev"] * 100, 1),
-        "Stake Kelly ($)": round(pick["kelly"] * banco, 2),
-    })
-
-  df_picks = pd.DataFrame(filas).sort_values(by="EV %", ascending=False)
-  st.dataframe(df_picks, use_container_width=True)
-
-  st.markdown("---")
-  st.subheader("📊 Desglose Analítico Detallado por Partido")
-
-  partido_sel = st.selectbox(
-      "Selecciona un evento para auditar sus métricas de IA:",
-      [a["partido"] for a in analisis],
-  )
-  match_obj = next(a for a in analisis if a["partido"] == partido_sel)
-
-  c1, c2, c3, c4 = st.columns(4)
-  with c1:
-    st.metric(
-        "Pitágoras Local / Visitante",
-        f"{match_obj['pitagoras_local']*100:.1f}% / {match_obj['pitagoras_visitante']*100:.1f}%",
+      st.markdown(f"""
+                <div class="card-partido">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <span style="background-color: #3b82f6; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">{ev['liga']}</span>
+                            <h4 style="margin: 10px 0 5px 0; display: flex; align-items: center; gap: 10px;">
+                                <img src="{logo_l}" width="28" height="28"> {ev['local_nombre']} vs <img src="{logo_v}" width="28" height="28"> {ev['visitante_nombre']}
+                            </h4>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="color: #22c55e; font-weight: bold; font-size: 18px;">EV: +{p['ev']*100:.1f}%</span><br>
+                            <span style="color: #94a3b8; font-size: 13px;">Cuota: {p['cuota_americana']}</span>
+                        </div>
+                    </div>
+                    <hr style="border-color: #334155; margin: 10px 0;">
+                    <p style="margin: 0; font-size: 15px;">
+                        🔥 <b>Pick Sugerido para {casa_apuestas}:</b> <span style="color: #60a5fa;">{p['etiqueta']}</span> 
+                        | Probabilidad IA: <b>{p['prob_modelo']*100:.1f}%</b> 
+                        | Stake Sugerido (Kelly): <b>${p['kelly']*banco:.2f}</b>
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+  else:
+    st.info(
+        "No se detectaron apuestas con valor positivo superior al umbral en la"
+        " fecha seleccionada. Cambia de fecha en el calendario lateral o ajusta"
+        " el edge mínimo."
     )
-  with c2:
-    st.metric("Log5 Neutral", f"{match_obj['log5_local']*100:.1f}%")
-  with c3:
-    if match_obj["proyeccion"]:
+
+with tab2:
+  st.subheader("🔬 Auditoría de Modelos y Explicación Algorítmica")
+  if analisis_eventos:
+    seleccion_partido = st.selectbox(
+        "Elige un partido para auditar:", [e["partido"] for e in analisis_eventos]
+    )
+    match_sel = next(
+        e for e in analisis_eventos if e["partido"] == seleccion_partido
+    )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
       st.metric(
-          "Proyección Marcador",
-          f"{match_obj['proyeccion']['local']:.1f} - {match_obj['proyeccion']['visitante']:.1f}",
+          "Expectativa Pitagórica",
+          f"{match_sel['pitagoras_local']*100:.1f}% vs"
+          f" {match_sel['pitagoras_visitante']*100:.1f}%",
+      )
+    with col2:
+      st.metric("Log5 H2H Ajustado", f"{match_sel['log5_local']*100:.1f}%")
+    with col3:
+      if match_sel["proyeccion"]:
+        st.metric(
+            "Marcador Proyectado",
+            f"{match_sel['proyeccion']['local']:.1f} -"
+            f" {match_sel['proyeccion']['total'] - match_sel['proyeccion']['local']:.1f}",
+        )
+      else:
+        st.metric("Marcador Proyectado", "N/D")
+
+    st.markdown("### 🤖 Reporte de Análisis Técnico de IA")
+    if match_sel["pick"]:
+      p_sel = match_sel["pick"]
+      st.success(
+          f"**Conclusión del Modelo:** El pick **{p_sel['etiqueta']}** presenta un"
+          f" rendimiento esperado (*EV*) de **+{p_sel['ev']*100:.1f}%**. Esto"
+          " se debe a que la probabilidad calculada por nuestros algoritmos"
+          f" (**{p_sel['prob_modelo']*100:.1f}%**) supera la cuota implícita de"
+          f" la casa de apuestas ({p_sel['cuota_americana']})."
       )
     else:
-      st.metric("Proyección Marcador", "N/D")
-  with c4:
-    if match_obj["pick"]:
-      st.metric(
-          f"Mejor Apuesta para {casa_apuestas}",
-          match_obj["pick"]["etiqueta"],
-          delta=f"+{match_obj['pick']['ev']*100:.1f}% EV",
+      st.warning(
+          "Este evento no cuenta con un margen de valor (*Edge*) suficiente"
+          " frente a las líneas actuales de las casas de apuestas."
+      )
+  else:
+    st.warning("No hay partidos disponibles para desglosar.")
+
+with tab3:
+  st.subheader("🧩 Constructor de Parlays Científicos (+EV)")
+  picks_planos = []
+  for e in analisis_eventos:
+    for c in e["candidatos"]:
+      picks_planos.append(
+          {**c, "partido": e["partido"], "liga": e["liga"]}
       )
 
-else:
-  st.warning(
-      "No se encontraron picks con valor positivo superior al umbral actual"
-      " contra las líneas de las casas de apuestas en este momento."
-  )
+  if len(picks_planos) >= 3:
+    picks_planos.sort(key=lambda x: x["ev"], reverse=True)
+    patas = picks_planos[:3]
+
+    prob_comb = 1.0
+    cuota_comb = 1.0
+    nombres_patas = []
+    for pata in patas:
+      prob_comb *= pata["prob_modelo"]
+      cuota_comb *= pata["cuota_decimal"]
+      nombres_patas.append(f"{pata['etiqueta']} ({pata['partido']})")
+
+    ev_parlay = valor_esperado(prob_comb, cuota_comb)
+    stake_parlay = min(kelly(prob_comb, cuota_comb) * 0.25, 0.05) * banco
+
+    st.markdown(f"""
+            <div class="card-partido" style="border: 2px solid #3b82f6;">
+                <h3>🎯 Parlay Destacado de 3 Patas</h3>
+                <ul>
+                    <li><b>Patas:</b> { ' + '.join(nombres_patas) }</li>
+                </ul>
+                <hr style="border-color: #334155;">
+                <p><b>Probabilidad Combinada:</b> {prob_comb*100:.2f}% | <b>Cuota Total Decimal:</b> {cuota_comb:.2f}</p>
+                <p><b>Valor Esperado (EV):</b> <span style="color: #22c55e;">+{ev_parlay*100:.2f}%</span> | <b>Stake Sugerido:</b> ${stake_parlay:.2f}</p>
+            </div>
+        """, unsafe_allow_html=True)
+  else:
+    st.info(
+        "Se necesitan al menos 3 picks con valor positivo en la fecha elegida"
+        " para armar los parlays automáticos."
+    )
 
 st.markdown("---")
 st.caption(
-    "Desarrollado para Eloy Zambrano · Piquis AI Engine operando con cuotas de"
-    " referencia en tiempo real."
+    "Piquis AI Engine · Arquitectura orientada a Draftea y Playdoit con"
+    " estadísticas de ESPN en tiempo real."
 )
