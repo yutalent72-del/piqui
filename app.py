@@ -242,29 +242,25 @@ with tab1:
           prob_pick = ph
           momio_pick = decimal_a_americano(p["dec_local"])
           razonamiento = (
-              f"Piqui proyecta una ventaja estadística para el equipo local."
-              f" El mercado le otorga una probabilidad implícita sin comisión"
-              f" (fair odds) del {ph:.1f}% frente al {pa:.1f}% del visitante."
-              f" La cuota de mercado en {momio_pick} ofrece solidez"
-              " matemática para respaldar al local."
+              f"Piqui proyecta ventaja para el local. Probabilidad implícita"
+              f" sin comisión del {ph:.1f}% frente al {pa:.1f}% del visitante."
+              f" Cuota de mercado en {momio_pick}."
           )
         else:
           pick_recomendado = f"Gana {visitante} (Moneyline)"
           prob_pick = pa
           momio_pick = decimal_a_americano(p["dec_visitante"])
           razonamiento = (
-              f"Piqui identifica mejores tendencias en el cuadro visitante. Su"
-              f" probabilidad ajustada de victoria sin vig es del {pa:.1f}%,"
-              f" superando el {ph:.1f}% del anfitrión. Respaldar al visitante"
-              f" a cuota {momio_pick} presenta una expectativa favorable."
+              f"Piqui identifica mejores tendencias en el visitante. Su"
+              f" probabilidad ajustada sin vig es del {pa:.1f}%, superando el"
+              f" {ph:.1f}% del anfitrión. Cuota en {momio_pick}."
           )
       else:
-        pick_recomendado = "Sin línea definitiva configurada"
+        pick_recomendado = "Sin línea definitiva"
         prob_pick = 50.0
         momio_pick = "N/D"
         razonamiento = (
-            "Las cuotas de este encuentro se encuentran en desarrollo o la"
-            " casa de apuestas aún no fija líneas principales de dinero."
+            "Cuotas en desarrollo o pendientes por la casa de apuestas."
         )
 
       st.markdown(
@@ -340,25 +336,4 @@ with tab2:
                 <p style="color: #94a3b8; font-size: 13px; margin-bottom: 14px;"><b>Razonamiento:</b> Combinación seleccionada por cruce de mayores probabilidades de mercado sin comisiones (vig).</p>
                 <ul style="color: #f8fafc; margin-bottom: 15px; line-height: 1.6;">
                     <li><b>{legs[0]['pick']}</b> ({legs[0]['partido']}) — Prob: {legs[0]['prob']*100:.1f}%</li>
-                    <li><b>{legs[1]['pick']}</b> ({legs[1]['partido']}) — Prob: {legs[1]['prob']*100:.1f}%</li>
-                </ul>
-                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #312e81; padding-top: 10px; margin-top: 10px;">
-                    <span style="color: #4ade80; font-weight: 700; font-size: 16px;">Probabilidad Combinada: {p2_prob:.1f}%</span>
-                    <span style="color: #38bdf8; font-weight: 700; font-size: 16px;">Momio Estimado: {p2_amer} ({p2_dec:.2f})</span>
-                </div>
-            </div>
-        """,
-          unsafe_allow_html=True,
-      )
-
-    if len(legs) >= 3:
-      p3_prob = legs[0]["prob"] * legs[1]["prob"] * legs[2]["prob"] * 100
-      p3_dec = legs[0]["dec"] * legs[1]["dec"] * legs[2]["dec"]
-      p3_amer = decimal_a_americano(p3_dec)
-
-      st.markdown(
-          f"""
-            <div class="parlay-card">
-                <h3 style="margin:0 0 10px 0; color: #c084fc; font-size: 20px;">🔥 Súper Parlay de 3 Patas</h3>
-                <p style="color: #94a3b8; font-size: 13px; margin-bottom: 14px;"><b>Razonamiento:</b> Estructura de mayor valor esperada seleccionada bajo criterios cuantitativos de Piqui.</p>
-                <ul style="color: #f8fafc; margin-
+                    <li><b>{legs[1]['pick']}</b> ({legs[1]['partido']}) — Prob: {legs[1]['prob']*1
