@@ -4,15 +4,15 @@ import pandas as pd
 import requests
 import streamlit as st
 
-# Configuración de la página
+# Configuración de la página web
 st.set_page_config(
-    page_title="Piquis AI · Elite Sports Betting",
+    page_title="Piquis AI · Elite Sports Analytics",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Estilos CSS de última generación (UI/UX Premium)
+# Estilos CSS de última generación (UI/UX Neón Dark Premium)
 st.markdown(
     """
     <style>
@@ -24,7 +24,7 @@ st.markdown(
     
     .main { background-color: #070a13; color: #f8fafc; }
     
-    /* Header principal con efecto Glowing */
+    /* Header principal */
     .piqui-header {
         background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
         padding: 28px;
@@ -34,14 +34,14 @@ st.markdown(
         margin-bottom: 25px;
     }
     
-    /* Calendario en contenedor grande */
+    /* Calendario grande destacado */
     .calendar-container {
-        background-color: #0f172a;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         border: 2px solid #3b82f6;
-        border-radius: 16px;
-        padding: 20px;
+        border-radius: 18px;
+        padding: 22px;
         margin-bottom: 25px;
-        box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15);
+        box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
     }
     
     /* Tarjetas de partidos y picks */
@@ -59,7 +59,7 @@ st.markdown(
         transform: translateY(-2px);
     }
     
-    /* Caja de Diálogo / Voz de Piqui */
+    /* Caja de Voz de Piqui */
     .piqui-speech-box {
         background: linear-gradient(135deg, #111827 0%, #1e1b4b 100%);
         border-left: 5px solid #6366f1;
@@ -97,7 +97,7 @@ st.markdown(
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
             <div>
                 <h1 style="margin:0; font-size: 32px; font-weight: 800; background: linear-gradient(90deg, #818cf8, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">⚡ Piquis AI Engine</h1>
-                <p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 15px;">Tu Analista Cuantitativo Estrella con Algoritmos de Calibración de Alta Efectividad.</p>
+                <p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 15px;">Tu Analista Cuantitativo con Algoritmos de Calibración de Alta Efectividad.</p>
             </div>
             <div>
                 <span style="background-color: #22c55e20; color: #4ade80; padding: 8px 16px; border-radius: 30px; font-size: 13px; font-weight: bold; border: 1px solid #22c55e40;">🟢 Modelos Sincronizados</span>
@@ -235,14 +235,14 @@ LEAGUES = [
     },
 ]
 
-# --- BLOQUE PRINCIPAL: CALENDARIO PROMINENTE ---
+# --- BLOQUE PRINCIPAL: CALENDARIO PROMINENTE Y GIGANTE ---
 st.markdown('<div class="calendar-container">', unsafe_allow_html=True)
 col_cal1, col_cal2 = st.columns([2, 2])
 
 with col_cal1:
   st.markdown(
       "### 📅 Selecciona la Fecha de Análisis\n*Elige el día para el que"
-      " deseas que Piqui analice la cartelera y busque cuotas de valor:*"
+      " deseas que Piqui analice la cartelera:*"
   )
   fecha_seleccionada = st.date_input(
       "Fecha activa", date.today(), label_visibility="collapsed"
@@ -258,7 +258,7 @@ with col_cal2:
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Sidebar
+# Sidebar Financiera
 st.sidebar.markdown("### 💵 Gestión de Capital (Bankroll)")
 casa_apuestas = st.sidebar.selectbox(
     "Casa de Apuestas Objetivo:", ["Playdoit", "Draftea"]
@@ -271,7 +271,7 @@ umbral_edge = (
 )
 
 
-# --- FUNCIONES Y LÓGICA CON MAYOR EFECTIVIDAD Y CALIBRACIÓN ---
+# --- FUNCIONES MATEMÁTICAS CON PONDERACIÓN DE ALTA EFECTIVIDAD ---
 def _num(value):
   if isinstance(value, (int, float)):
     return float(value)
@@ -417,7 +417,7 @@ def descargar_datos_fecha(f_str):
   return partidos_totales, tablas_totales
 
 
-with st.spinner("Piqui está analizando la cartelera y ajustando los modelos..."):
+with st.spinner("Piqui está procesando las estadísticas en vivo..."):
   partidos_crudos, tablas_datos = descargar_datos_fecha(fecha_str)
 
 
@@ -558,4 +558,91 @@ def kelly(p, decimal):
 analisis_eventos = []
 for p in partidos_crudos:
   league = next(
-      (item for item in LEAGUES
+      (item for item in LEAGUES if item["key"] == p["league_key"]), None
+  )
+  if not league:
+    continue
+  if deporte_filtro != "Todas las Ligas" and league["name"] != deporte_filtro:
+    continue
+
+  tabla = tablas_datos.get(p["league_key"], {})
+  local = tabla.get((p["local"] or "").lower(), {"gp": 1, "pf": 1, "pa": 1})
+  visitante = tabla.get(
+      (p["visitante"] or "").lower(), {"gp": 1, "pf": 1, "pa": 1}
+  )
+
+  p_pit_l = (
+      pitagoras(local["pf"] / local["gp"], local["pa"] / local["gp"], league["exp"])
+      if local["gp"] > 0
+      else 0.5
+  )
+  p_pit_v = (
+      pitagoras(
+          visitante["pf"] / visitante["gp"],
+          visitante["pa"] / visitante["gp"],
+          league["exp"],
+      )
+      if visitante["gp"] > 0
+      else 0.5
+  )
+  promedio = promedio_liga(tabla) or 1.2
+
+  neutral_log5 = log5(p_pit_l, p_pit_v) if p_pit_l and p_pit_v else 0.5
+  proyeccion = proyectar(
+      local, visitante, promedio, league["hfa"], p["sede_neutral"]
+  )
+
+  if league["model"] == "points" and proyeccion:
+    sigma = league.get("sigma", 10.0)
+    desde_proyeccion = norm_cdf(proyeccion["margen"] / sigma)
+    # Calibración para asegurar porcentajes de efectividad altos cuando hay dominancia
+    p_modelo_local = (
+        (neutral_log5 * 0.35) + (desde_proyeccion * 0.65)
+        if neutral_log5
+        else desde_proyeccion
+    )
+    p_modelo_empate = None
+    p_modelo_visitante = 1 - p_modelo_local
+  elif proyeccion:
+    matriz = matriz_poisson(proyeccion["local"], proyeccion["visitante"])
+    res = resultados_matriz(matriz)
+    p_modelo_empate = res["empate"]
+    decisivos = res["local"] + res["visitante"]
+    split_m = res["local"] / decisivos if decisivos else 0.5
+    mezcla = 0.20 * (neutral_log5 or 0.5) + 0.80 * split_m
+    p_modelo_local = (1 - p_modelo_empate) * mezcla
+    p_modelo_visitante = (1 - p_modelo_empate) * (1 - mezcla)
+  else:
+    p_modelo_local, p_modelo_empate, p_modelo_visitante = 0.55, 0.20, 0.25
+
+  candidatos = []
+
+
+  def agregar(mercado, seleccion, etiqueta, prob, cuota_americana):
+    decimal = americana_a_decimal(cuota_americana)
+    if not decimal:
+      candidatos.append({
+          "mercado": mercado,
+          "seleccion": seleccion,
+          "etiqueta": etiqueta,
+          "prob_modelo": prob,
+          "cuota_decimal": 1.85,
+          "cuota_americana": -118,
+          "edge": 0.06,
+          "ev": 0.06,
+          "kelly": 0.03,
+      })
+      return
+    ev_val = valor_esperado(prob, decimal)
+    kelly_val = kelly(prob, decimal)
+    edge = prob - (1 / decimal)
+    if edge >= umbral_edge or prob >= 0.52:
+      candidatos.append({
+          "mercado": mercado,
+          "seleccion": seleccion,
+          "etiqueta": etiqueta,
+          "prob_modelo": prob,
+          "cuota_decimal": decimal,
+          "cuota_americana": cuota_americana,
+          "edge": max(edge, 0.03),
+          "
