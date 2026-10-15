@@ -1,4 +1,5 @@
 from datetime import date
+import itertools
 import math
 import pandas as pd
 import requests
@@ -12,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Estilos CSS Limpios y Profesionales (Estilo Bloomberg / Terminal Financiera)
+# Estilos CSS Limpios y Profesionales
 st.markdown(
     """
     <style>
@@ -24,7 +25,6 @@ st.markdown(
     
     .main { background-color: #0b0f19; color: #f1f5f9; }
     
-    /* Header minimalista y elegante */
     .header-box {
         background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
         border: 1px solid #312e81;
@@ -33,7 +33,6 @@ st.markdown(
         margin-bottom: 20px;
     }
     
-    /* Calendario centrado y grande */
     .calendar-box {
         background-color: #111827;
         border: 1px solid #374151;
@@ -42,7 +41,6 @@ st.markdown(
         margin-bottom: 20px;
     }
     
-    /* Tarjetas de partidos limpias */
     .match-card {
         background-color: #111827;
         border: 1px solid #1f2937;
@@ -55,7 +53,15 @@ st.markdown(
         border-color: #6366f1;
     }
     
-    /* Caja de voz de Piqui */
+    .parlay-card {
+        background: linear-gradient(135deg, #1e1b4b 0%, #111827 100%);
+        border: 2px solid #6366f1;
+        padding: 22px;
+        border-radius: 16px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
+    }
+    
     .piqui-box {
         background-color: #0f172a;
         border-left: 4px solid #6366f1;
@@ -76,13 +82,13 @@ st.markdown(
     """
     <div class="header-box">
         <h1 style="margin:0; font-size: 28px; font-weight: 700; color: #818cf8;">⚡ Piquis AI · Terminal Cuantitativa</h1>
-        <p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 14px;">Análisis directo con carteleras oficiales sincronizadas al instante.</p>
+        <p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 14px;">Picks directos y razonamiento matemático con cuotas oficiales sincronizadas.</p>
     </div>
 """,
     unsafe_allow_html=True,
 )
 
-# Configuración de Ligas Oficiales ESPN
+# Ligas Oficiales ESPN
 LEAGUES = [
     {
         "key": "mex.1",
@@ -134,7 +140,15 @@ with col2:
 st.markdown("</div>", unsafe_allow_html=True)
 
 
-# Descarga directa y limpia desde ESPN
+def decimal_a_americano(dec):
+  if not dec or dec <= 1.01:
+    return "+100"
+  return (
+      f"+{round((dec - 1) * 100)}" if dec >= 2.0 else f"{round(-100 / (dec - 1))}"
+  )
+
+
+# Descarga de cartelera y cálculo de probabilidades sin vig
 @st.cache_data(ttl=180)
 def cargar_cartelera(f_str):
   eventos = []
@@ -157,66 +171,97 @@ def cargar_cartelera(f_str):
           odds = odds_list[0] if odds_list else {}
           ml = odds.get("moneyline", {})
 
+          odd_h = (ml.get("home") or {}).get("close", {}).get("odds")
+          odd_a = (ml.get("away") or {}).get("close", {}).get("odds")
+
+          dec_h = (
+              (1 + odd_h / 100 if odd_h > 0 else 1 + 100 / abs(odd_h))
+              if odd_h
+              else None
+          )
+          dec_a = (
+              (1 + odd_a / 100 if odd_a > 0 else 1 + 100 / abs(odd_a))
+              if odd_a
+              else None
+          )
+
+          prob_h, prob_a = None, None
+          if dec_h and dec_a:
+            iv_h, iv_a = 1 / dec_h, 1 / dec_a
+            suma_vig = iv_h + iv_a
+            prob_h = (iv_h / suma_vig) * 100
+            prob_a = (iv_a / suma_vig) * 100
+
           eventos.append({
               "liga": league["name"],
               "local": (home.get("team") or {}).get("displayName"),
               "visitante": (away.get("team") or {}).get("displayName"),
               "logo_local": (home.get("team") or {}).get("logo"),
               "logo_visitante": (away.get("team") or {}).get("logo"),
-              "ml_local": (ml.get("home") or {}).get("close", {}).get("odds"),
-              "ml_visitante": (ml.get("away") or {}).get("close", {}).get("odds"),
+              "odd_local": odd_h,
+              "odd_visitante": odd_a,
+              "dec_local": dec_h,
+              "dec_visitante": dec_a,
+              "prob_local": prob_h,
+              "prob_visitante": prob_a,
           })
     except Exception:
       pass
   return eventos
 
 
-with st.spinner("Sincronizando cartelera oficial..."):
+with st.spinner("Sincronizando cartelera y calculando probabilidades..."):
   partidos = cargar_cartelera(fecha_str)
 
-# Filtrar por liga seleccionada
 if filtro_liga != "Todas las Ligas":
   partidos = [p for p in partidos if p["liga"] == filtro_liga]
 
-st.markdown(f"### 🎯 Cartelera y Picks ({fecha_seleccionada})")
+tab1, tab2 = st.tabs([
+    "🎯 Cartelera y Picks con Razonamiento",
+    "🧩 Parlays Generados por Piqui",
+])
 
-if partidos:
-  for p in partidos:
-    local = p["local"] or "Local"
-    visitante = p["visitante"] or "Visitante"
-    logo_l = p["logo_local"] or "https://via.placeholder.com/30"
-    logo_v = p["logo_visitante"] or "https://via.placeholder.com/30"
-
-    # Análisis directo y limpio de Piqui sin inventar momios raros
-    explicacion_piqui = (
-        f"🦜 **Piqui dice:** Analicé el duelo entre **{local}** y"
-        f" **{visitante}**. La información está sincronizada directamente de"
-        " la cartelera oficial. Revisa las líneas de tu casa de apuestas"
-        " preferida para este enfrentamiento."
-    )
-
-    st.markdown(
-        f"""
-        <div class="match-card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <span style="color: #60a5fa; font-size: 11px; font-weight: 700; background: #1e3a8a40; padding: 3px 8px; border-radius: 4px;">{p['liga']}</span>
-                    <h4 style="margin: 8px 0 0 0; font-size: 18px; display: flex; align-items: center; gap: 10px;">
-                        <img src="{logo_l}" width="28" height="28" style="border-radius: 50%;"> {local} 
-                        <span style="color: #64748b; font-size: 13px; font-weight: normal;">vs</span> 
-                        <img src="{logo_v}" width="28" height="28" style="border-radius: 50%;"> {visitante}
-                    </h4>
-                </div>
-            </div>
-            <div class="piqui-box">
-                {explicacion_piqui}
-            </div>
-        </div>
-    """,
-        unsafe_allow_html=True,
-    )
-else:
-  st.info(
-      "No hay partidos programados en las ligas principales para esta fecha."
-      " Prueba seleccionando el día actual en el calendario de arriba."
+with tab1:
+  st.markdown(
+      f"### 🎯 Análisis y Picks Recomendados ({fecha_seleccionada})"
   )
+
+  if partidos:
+    for p in partidos:
+      local = p["local"] or "Local"
+      visitante = p["visitante"] or "Visitante"
+      logo_l = p["logo_local"] or "https://via.placeholder.com/30"
+      logo_v = p["logo_visitante"] or "https://via.placeholder.com/30"
+
+      ph = p["prob_local"]
+      pa = p["prob_visitante"]
+
+      if ph and pa:
+        if ph > pa:
+          pick_recomendado = f"Gana {local} (Moneyline)"
+          prob_pick = ph
+          momio_pick = decimal_a_americano(p["dec_local"])
+          razonamiento = (
+              f"Piqui proyecta una ventaja estadística para el equipo local."
+              f" El mercado le otorga una probabilidad implícita sin comisión"
+              f" (*fair odds*) del **{ph:.1f}%** frente al **{pa:.1f}%** del"
+              f" visitante. La cuota de mercado en **{momio_pick}** ofrece"
+              " solidez matemática para respaldar al local."
+          )
+        else:
+          pick_recomendado = f"Gana {visitante} (Moneyline)"
+          prob_pick = pa
+          momio_pick = decimal_a_americano(p["dec_visitante"])
+          razonamiento = (
+              f"Piqui identifica mejores tendencias en el cuadro visitante."
+              f" Su probabilidad ajustada de victoria sin vig es del"
+              f" **{pa:.1f}%**, superando el **{ph:.1f}%** del anfitrión."
+              f" Respaldar al visitante a cuota **{momio_pick}** presenta una"
+              " expectativa favorable."
+          )
+      else:
+        pick_recomendado = "Sin línea definitiva configurada"
+        prob_pick = 50.0
+        momio_pick = "N/D"
+        razonamiento = (
+            "Las
