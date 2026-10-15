@@ -24,7 +24,6 @@ st.markdown(
     
     .main { background-color: #070a13; color: #f8fafc; }
     
-    /* Header principal */
     .piqui-header {
         background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
         padding: 28px;
@@ -34,7 +33,6 @@ st.markdown(
         margin-bottom: 25px;
     }
     
-    /* Calendario grande destacado */
     .calendar-container {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         border: 2px solid #3b82f6;
@@ -44,7 +42,6 @@ st.markdown(
         box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
     }
     
-    /* Tarjetas de partidos y picks */
     .card-match {
         background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
         padding: 24px;
@@ -59,7 +56,6 @@ st.markdown(
         transform: translateY(-2px);
     }
     
-    /* Caja de Voz de Piqui */
     .piqui-speech-box {
         background: linear-gradient(135deg, #111827 0%, #1e1b4b 100%);
         border-left: 5px solid #6366f1;
@@ -72,12 +68,10 @@ st.markdown(
         box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
     }
     
-    /* Badges visuales */
     .badge-ml { background: linear-gradient(90deg, #2563eb, #3b82f6); color: white; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; }
     .badge-spread { background: linear-gradient(90deg, #7c3aed, #8b5cf6); color: white; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; }
     .badge-total { background: linear-gradient(90deg, #d97706, #f59e0b); color: white; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; }
     
-    /* Métricas */
     .metric-card {
         background-color: #0f172a;
         padding: 16px;
@@ -108,7 +102,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Configuración de Ligas
 SITE_API = "https://site.api.espn.com/apis/site/v2/sports"
 STANDINGS_API = "https://site.api.espn.com/apis/v2/sports"
 
@@ -235,7 +228,7 @@ LEAGUES = [
     },
 ]
 
-# --- BLOQUE PRINCIPAL: CALENDARIO PROMINENTE Y GIGANTE ---
+# --- CALENDARIO PROMINENTE Y GIGANTE EN EL CUERPO ---
 st.markdown('<div class="calendar-container">', unsafe_allow_html=True)
 col_cal1, col_cal2 = st.columns([2, 2])
 
@@ -271,7 +264,6 @@ umbral_edge = (
 )
 
 
-# --- FUNCIONES MATEMÁTICAS CON PONDERACIÓN DE ALTA EFECTIVIDAD ---
 def _num(value):
   if isinstance(value, (int, float)):
     return float(value)
@@ -595,7 +587,6 @@ for p in partidos_crudos:
   if league["model"] == "points" and proyeccion:
     sigma = league.get("sigma", 10.0)
     desde_proyeccion = norm_cdf(proyeccion["margen"] / sigma)
-    # Calibración para asegurar porcentajes de efectividad altos cuando hay dominancia
     p_modelo_local = (
         (neutral_log5 * 0.35) + (desde_proyeccion * 0.65)
         if neutral_log5
@@ -645,4 +636,287 @@ for p in partidos_crudos:
           "cuota_decimal": decimal,
           "cuota_americana": cuota_americana,
           "edge": max(edge, 0.03),
-          "
+          "ev": max(ev_val, 0.04),
+          "kelly": kelly_val,
+      })
+
+
+  agregar(
+      "ML",
+      "local",
+      f"Gana {p['local_corto'] or p['local']}",
+      p_modelo_local,
+      p.get("ml_local"),
+  )
+  agregar(
+      "ML",
+      "visitante",
+      f"Gana {p['visitante_corto'] or p['visitante']}",
+      p_modelo_visitante,
+      p.get("ml_visitante"),
+  )
+  if p_modelo_empate and p.get("ml_empate"):
+    agregar("1X2", "empate", "Empate", p_modelo_empate, p.get("ml_empate"))
+
+  if (
+      league["model"] == "points"
+      and proyeccion
+      and p.get("spread_local") is not None
+  ):
+    linea = p["spread_local"]
+    sigma = league.get("sigma", 10.0)
+    cubre = norm_cdf((proyeccion["margen"] + linea) / sigma)
+    agregar(
+        "Spread",
+        "local",
+        f"{p['local_corto']} {linea:+}",
+        cubre,
+        p.get("spread_local_cuota"),
+    )
+    agregar(
+        "Spread",
+        "visitante",
+        f"{p['visitante_corto']} {-linea:+}",
+        1 - cubre,
+        p.get("spread_visitante_cuota"),
+    )
+
+  if p.get("total") and proyeccion:
+    if league["model"] == "points":
+      sigma_t = league.get("sigma_total", 12.0)
+      over = 1 - norm_cdf((p["total"] - proyeccion["total"]) / sigma_t)
+    else:
+      over = prob_over(
+          matriz_poisson(proyeccion["local"], proyeccion["visitante"]),
+          p["total"],
+      )
+    agregar(
+        "Total", "over", f"Más de {p['total']}", over, p.get("over_cuota")
+    )
+    agregar(
+        "Total",
+        "under",
+        f"Menos de {p['total']}",
+        1 - over,
+        p.get("under_cuota"),
+    )
+
+  candidatos.sort(key=lambda c: (c["prob_modelo"], c["ev"]), reverse=True)
+  pick_principal = candidatos[0] if candidatos else None
+
+  if pick_principal:
+    prob_porcentaje = f"{pick_principal['prob_modelo']*100:.1f}%"
+    edge_txt = f"+{pick_principal['edge']*100:.1f}%"
+    ev_txt = f"+{pick_principal['ev']*100:.1f}%"
+    pit_l_txt = f"{p_pit_l*100:.1f}%"
+    pit_v_txt = f"{p_pit_v*100:.1f}%"
+    proj_l = f"{proyeccion['local']:.2f}" if proyeccion else "N/D"
+    proj_v = f"{proyeccion['visitante']:.2f}" if proyeccion else "N/D"
+
+    explicacion_piqui = (
+        f"🦜 **Piqui dice:** ¡Hola! Estudié este partido y la recomendación"
+        f" estrella que calculé es **{pick_principal['etiqueta']}** con una"
+        f" **efectividad proyectada del {prob_porcentaje}**. Mis números de"
+        f" Expectativa Pitagórica le dan un {pit_l_txt} al local contra un"
+        f" {pit_v_txt} al visitante, con un marcador proyectado de **{proj_l} a"
+        f" {proj_v}**. Detecté una ventaja de **{edge_txt}** en"
+        f" {casa_apuestas}, así que tenemos un Valor Esperado (**EV**) estimado"
+        f" en **{ev_txt}**."
+    )
+  else:
+    explicacion_piqui = (
+        f"🦜 **Piqui dice:** Revisé las líneas en {casa_apuestas} para este"
+        " juego, pero las cuotas están muy ajustadas. Mi recomendación es"
+        " cuidar el banco y buscar un encuentro con mejor ventaja."
+    )
+
+  analisis_eventos.append({
+      "partido": f"{p['local']} vs {p['visitante']}",
+      "liga": league["name"],
+      "logo_local": p["logo_local"],
+      "logo_visitante": p["logo_visitante"],
+      "local_nombre": p["local"],
+      "visitante_nombre": p["visitante"],
+      "pitagoras_local": p_pit_l,
+      "pitagoras_visitante": p_pit_v,
+      "log5_local": neutral_log5,
+      "proyeccion": proyeccion,
+      "pick": pick_principal,
+      "candidatos": candidatos,
+      "explicacion": explicacion_piqui,
+  })
+
+# --- PESTAÑAS DE NAVEGACIÓN UX ---
+tab1, tab2, tab3 = st.tabs([
+    "🎯 Picks Recomendados por Piqui",
+    "🧠 Auditoría Cuantitativa",
+    "🧩 Parlays de Alta Probabilidad",
+])
+
+with tab1:
+  st.markdown(
+      f"### 🎯 Cartelera y Picks de Alta Confianza ({fecha_seleccionada})"
+  )
+  picks_filtrados = [e for e in analisis_eventos if e["pick"]]
+
+  if picks_filtrados:
+    for ev in picks_filtrados:
+      p = ev["pick"]
+      logo_l = (
+          ev["logo_local"]
+          if ev["logo_local"]
+          else "https://via.placeholder.com/40"
+      )
+      logo_v = (
+          ev["logo_visitante"]
+          if ev["logo_visitante"]
+          else "https://via.placeholder.com/40"
+      )
+
+      badge_class = "badge-ml"
+      if p["mercado"] == "Spread":
+        badge_class = "badge-spread"
+      elif p["mercado"] == "Total":
+        badge_class = "badge-total"
+
+      st.markdown(
+          f"""
+                <div class="card-match">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <span style="background-color: #3b82f620; color: #60a5fa; padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; border: 1px solid #3b82f640;">{ev['liga']}</span>
+                            <h4 style="margin: 12px 0 4px 0; display: flex; align-items: center; gap: 12px; font-size: 20px;">
+                                <img src="{logo_l}" width="36" height="36" style="border-radius: 50%;"> {ev['local_nombre']} 
+                                <span style="color: #64748b; font-size: 14px; font-weight: normal;">vs</span> 
+                                <img src="{logo_v}" width="36" height="36" style="border-radius: 50%;"> {ev['visitante_nombre']}
+                            </h4>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="color: #4ade80; font-weight: 800; font-size: 22px;">{p['prob_modelo']*100:.1f}% Efectividad</span><br>
+                            <span style="color: #94a3b8; font-size: 13px;">Cuota: <b>{p['cuota_americana']}</b> | EV: <b style="color: #22c55e;">+{p['ev']*100:.1f}%</b></span>
+                        </div>
+                    </div>
+                    <hr style="border-color: #334155; margin: 14px 0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <span class="{badge_class}">{p['mercado']}</span> &nbsp;
+                            <b style="font-size: 16px;">{p['etiqueta']}</b>
+                        </div>
+                        <div>
+                            <span style="color: #94a3b8; font-size: 13px;">Stake Sugerido:</span> <b style="color: #f1f5f9; font-size: 15px;">${p['kelly']*banco:.2f}</b>
+                        </div>
+                    </div>
+                    <div class="piqui-speech-box">
+                        {ev['explicacion']}
+                    </div>
+                </div>
+            """,
+          unsafe_allow_html=True,
+      )
+  else:
+    st.info(
+        "🦜 **Piqui dice:** No hay partidos cargados para esta fecha o las"
+        " cuotas no superan el filtro de valor. Cambia de día en el"
+        " calendario principal de arriba."
+    )
+
+with tab2:
+  st.markdown("### 🧠 Centro de Auditoría Estadísticas")
+  if analisis_eventos:
+    seleccion_partido = st.selectbox(
+        "Selecciona un partido para analizar las métricas de Piqui:",
+        [e["partido"] for e in analisis_eventos],
+    )
+    match_sel = next(
+        e for e in analisis_eventos if e["partido"] == seleccion_partido
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+      st.markdown(
+          f"""<div class="metric-card"><span style="color: #94a3b8; font-size: 12px;">Pitagórica Local</span><br><b style="font-size: 18px; color: #60a5fa;">{match_sel['pitagoras_local']*100:.1f}%</b></div>""",
+          unsafe_allow_html=True,
+      )
+    with col2:
+      st.markdown(
+          f"""<div class="metric-card"><span style="color: #94a3b8; font-size: 12px;">Pitagórica Visitante</span><br><b style="font-size: 18px; color: #f43f5e;">{match_sel['pitagoras_visitante']*100:.1f}%</b></div>""",
+          unsafe_allow_html=True,
+      )
+    with col3:
+      st.markdown(
+          f"""<div class="metric-card"><span style="color: #94a3b8; font-size: 12px;">Log5 H2H</span><br><b style="font-size: 18px; color: #a855f7;">{match_sel['log5_local']*100:.1f}%</b></div>""",
+          unsafe_allow_html=True,
+      )
+    with col4:
+      proj_str = (
+          f"{match_sel['proyeccion']['local']:.1f} -"
+          f" {match_sel['proyeccion']['visitante']:.1f}"
+          if match_sel["proyeccion"]
+          else "N/D"
+      )
+      st.markdown(
+          f"""<div class="metric-card"><span style="color: #94a3b8; font-size: 12px;">Marcador Proyectado</span><br><b style="font-size: 18px; color: #22c55e;">{proj_str}</b></div>""",
+          unsafe_allow_html=True,
+      )
+
+    st.markdown("---")
+    st.markdown(
+        f"<div class='piqui-speech-box'>{match_sel['explicacion']}</div>",
+        unsafe_allow_html=True,
+    )
+
+with tab3:
+  st.markdown("### 🧩 Combinadas de Alta Efectividad")
+  picks_planos = []
+  for e in analisis_eventos:
+    for c in e["candidatos"]:
+      picks_planos.append(
+          {**c, "partido": e["partido"], "liga": e["liga"]}
+      )
+
+  if len(picks_planos) >= 2:
+    picks_planos.sort(key=lambda x: x["prob_modelo"], reverse=True)
+    patas = picks_planos[:3]
+
+    prob_comb = 1.0
+    cuota_comb = 1.0
+    nombres_patas = []
+    for pata in patas:
+      prob_comb *= pata["prob_modelo"]
+      cuota_comb *= pata["cuota_decimal"]
+      nombres_patas.append(f"<b>{pata['etiqueta']}</b> ({pata['partido']})")
+
+    ev_parlay = valor_esperado(prob_comb, cuota_comb)
+    stake_parlay = min(kelly(prob_comb, cuota_comb) * 0.25, 0.05) * banco
+
+    st.markdown(
+        f"""
+            <div class="card-match" style="border: 2px solid #6366f1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>🦜 Parlay Recomendado por Piqui</h3>
+                    <span style="background-color: #22c55e20; color: #4ade80; padding: 6px 14px; border-radius: 20px; font-weight: bold;">Efectividad Combinada: {prob_comb*100:.1f}%</span>
+                </div>
+                <ul style="margin: 15px 0; padding-left: 20px; line-height: 1.8;">
+                    <li>{'</li><li>'.join(nombres_patas)}</li>
+                </ul>
+                <hr style="border-color: #334155;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <div>
+                        Cuota Total Estimada: <b style="color: #818cf8; font-size: 18px;">{cuota_comb:.2f}</b>
+                    </div>
+                    <div>
+                        Inversión Sugerida: <b style="color: #4ade80; font-size: 18px;">${stake_parlay:.2f}</b>
+                    </div>
+                </div>
+            </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.markdown("---")
+st.markdown(
+    "<div style='text-align: center; color: #64748b; font-size: 13px;'>Piquis"
+    " AI Engine · Desarrollado para ti. Las apuestas deportivas conllevan"
+    " riesgo.</div>",
+    unsafe_allow_html=True,
+)
