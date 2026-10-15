@@ -8,7 +8,7 @@ import unicodedata
 import requests
 
 # ========= CONFIGURACIÓN =========
-ODDS_API_KEY = "PEGA_AQUI_TU_CLAVE"  # https://the-odds-api.com
+ODDS_API_KEY = "5833e2cadae2fa0026f1a9090481dfa5"  # https://the-odds-api.com
 HORAS = 36  # partidos de las próximas X horas
 MEZCLA_MODELO = 0.5  # 0.5 = 50% modelo + 50% mercado
 EV_MINIMO = 0.015  # valor esperado mínimo (1.5%)
