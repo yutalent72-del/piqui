@@ -317,4 +317,4 @@ with tab2:
       p2_amer = decimal_a_americano(p2_dec)
 
       with st.container():
-        st.markdown(
+        st.markdown()
