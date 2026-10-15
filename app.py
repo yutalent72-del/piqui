@@ -49,14 +49,6 @@ st.markdown(
         margin-bottom: 16px;
     }
     
-    .parlay-card {
-        background: linear-gradient(135deg, #1e1b4b 0%, #111827 100%);
-        border: 2px solid #6366f1;
-        padding: 22px;
-        border-radius: 16px;
-        margin-bottom: 20px;
-    }
-    
     .piqui-box {
         background-color: #0f172a;
         border-left: 4px solid #6366f1;
@@ -324,15 +316,5 @@ with tab2:
       p2_dec = legs[0]["dec"] * legs[1]["dec"]
       p2_amer = decimal_a_americano(p2_dec)
 
-      patas_2_html = (
-          f"<li><b>{legs[0]['pick']}</b> ({legs[0]['partido']}) — Prob:"
-          f" {legs[0]['prob']*100:.1f}%</li>"
-          f"<li><b>{legs[1]['pick']}</b> ({legs[1]['partido']}) — Prob:"
-          f" {legs[1]['prob']*100:.1f}%</li>"
-      )
-
-      st.markdown(
-          f"""
-            <div class="parlay-card">
-                <h3 style="margin:0 0 10px 0; color: #818cf8; font-size: 20px;">🦜 Parlay de 2 Patas (Selección de Piqui)</h3>
-                <p style="color: #
+      with st.container():
+        st.markdown(
