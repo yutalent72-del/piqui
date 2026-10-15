@@ -47,10 +47,6 @@ st.markdown(
         padding: 20px;
         border-radius: 14px;
         margin-bottom: 16px;
-        transition: border-color 0.2s;
-    }
-    .match-card:hover {
-        border-color: #6366f1;
     }
     
     .parlay-card {
@@ -59,7 +55,6 @@ st.markdown(
         padding: 22px;
         border-radius: 16px;
         margin-bottom: 20px;
-        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
     }
     
     .piqui-box {
@@ -329,11 +324,15 @@ with tab2:
       p2_dec = legs[0]["dec"] * legs[1]["dec"]
       p2_amer = decimal_a_americano(p2_dec)
 
+      patas_2_html = (
+          f"<li><b>{legs[0]['pick']}</b> ({legs[0]['partido']}) — Prob:"
+          f" {legs[0]['prob']*100:.1f}%</li>"
+          f"<li><b>{legs[1]['pick']}</b> ({legs[1]['partido']}) — Prob:"
+          f" {legs[1]['prob']*100:.1f}%</li>"
+      )
+
       st.markdown(
           f"""
             <div class="parlay-card">
                 <h3 style="margin:0 0 10px 0; color: #818cf8; font-size: 20px;">🦜 Parlay de 2 Patas (Selección de Piqui)</h3>
-                <p style="color: #94a3b8; font-size: 13px; margin-bottom: 14px;"><b>Razonamiento:</b> Combinación seleccionada por cruce de mayores probabilidades de mercado sin comisiones (vig).</p>
-                <ul style="color: #f8fafc; margin-bottom: 15px; line-height: 1.6;">
-                    <li><b>{legs[0]['pick']}</b> ({legs[0]['partido']}) — Prob: {legs[0]['prob']*100:.1f}%</li>
-                    <li><b>{legs[1]['pick']}</b> ({legs[1]['partido']}) — Prob: {legs[1]['prob']*1
+                <p style="color: #
