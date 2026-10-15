@@ -228,7 +228,7 @@ LEAGUES = [
     },
 ]
 
-# --- CALENDARIO PROMINENTE Y GIGANTE EN EL CUERPO ---
+# --- CALENDARIO PROMINENTE ---
 st.markdown('<div class="calendar-container">', unsafe_allow_html=True)
 col_cal1, col_cal2 = st.columns([2, 2])
 
@@ -414,8 +414,8 @@ with st.spinner("Piqui está procesando las estadísticas en vivo..."):
 
 
 def pitagoras(pf, pa, exp):
-  if pf <= 0 and pa <= 0:
-    return None
+  if pf is None or pa is None or (pf <= 0 and pa <= 0):
+    return 0.5
   if pf <= 0:
     return 0.0
   if pa <= 0:
@@ -424,9 +424,11 @@ def pitagoras(pf, pa, exp):
 
 
 def log5(p_a, p_b):
+  if p_a is None or p_b is None:
+    return 0.5
   denom = p_a + p_b - 2 * p_a * p_b
   if denom <= 0:
-    return None
+    return 0.5
   return max(0.001, min(0.999, (p_a - p_a * p_b) / denom))
 
 
@@ -445,7 +447,7 @@ def promedio_liga(tabla):
 
 def proyectar(local, visitante, promedio, hfa, neutral=False):
   if not promedio or local["gp"] <= 0 or visitante["gp"] <= 0:
-    return None
+    return {"local": 1.0, "visitante": 1.0, "total": 2.0, "margen": 0.0}
   ataque_local = local["pf"] / local["gp"]
   defensa_local = local["pa"] / local["gp"] if local["pa"] > 0 else promedio
   ataque_visitante = visitante["pf"] / visitante["gp"]
@@ -577,9 +579,18 @@ for p in partidos_crudos:
       if visitante["gp"] > 0
       else 0.5
   )
-  promedio = promedio_liga(tabla) or 1.2
 
-  neutral_log5 = log5(p_pit_l, p_pit_v) if p_pit_l and p_pit_v else 0.5
+  # Control de valores nulos
+  if p_pit_l is None:
+    p_pit_l = 0.5
+  if p_pit_v is None:
+    p_pit_v = 0.5
+
+  promedio = promedio_liga(tabla) or 1.2
+  neutral_log5 = log5(p_pit_l, p_pit_v)
+  if neutral_log5 is None:
+    neutral_log5 = 0.5
+
   proyeccion = proyectar(
       local, visitante, promedio, league["hfa"], p["sede_neutral"]
   )
@@ -708,8 +719,8 @@ for p in partidos_crudos:
     prob_porcentaje = f"{pick_principal['prob_modelo']*100:.1f}%"
     edge_txt = f"+{pick_principal['edge']*100:.1f}%"
     ev_txt = f"+{pick_principal['ev']*100:.1f}%"
-    pit_l_txt = f"{p_pit_l*100:.1f}%"
-    pit_v_txt = f"{p_pit_v*100:.1f}%"
+    pit_l_txt = f"{(p_pit_l or 0.5)*100:.1f}%"
+    pit_v_txt = f"{(p_pit_v or 0.5)*100:.1f}%"
     proj_l = f"{proyeccion['local']:.2f}" if proyeccion else "N/D"
     proj_v = f"{proyeccion['visitante']:.2f}" if proyeccion else "N/D"
 
@@ -834,17 +845,17 @@ with tab2:
     col1, col2, col3, col4 = st.columns(4)
     with col1:
       st.markdown(
-          f"""<div class="metric-card"><span style="color: #94a3b8; font-size: 12px;">Pitagórica Local</span><br><b style="font-size: 18px; color: #60a5fa;">{match_sel['pitagoras_local']*100:.1f}%</b></div>""",
+          f"""<div class="metric-card"><span style="color: #94a3b8; font-size: 12px;">Pitagórica Local</span><br><b style="font-size: 18px; color: #60a5fa;">{(match_sel['pitagoras_local'] or 0.5)*100:.1f}%</b></div>""",
           unsafe_allow_html=True,
       )
     with col2:
       st.markdown(
-          f"""<div class="metric-card"><span style="color: #94a3b8; font-size: 12px;">Pitagórica Visitante</span><br><b style="font-size: 18px; color: #f43f5e;">{match_sel['pitagoras_visitante']*100:.1f}%</b></div>""",
+          f"""<div class="metric-card"><span style="color: #94a3b8; font-size: 12px;">Pitagórica Visitante</span><br><b style="font-size: 18px; color: #f43f5e;">{(match_sel['pitagoras_visitante'] or 0.5)*100:.1f}%</b></div>""",
           unsafe_allow_html=True,
       )
     with col3:
       st.markdown(
-          f"""<div class="metric-card"><span style="color: #94a3b8; font-size: 12px;">Log5 H2H</span><br><b style="font-size: 18px; color: #a855f7;">{match_sel['log5_local']*100:.1f}%</b></div>""",
+          f"""<div class="metric-card"><span style="color: #94a3b8; font-size: 12px;">Log5 H2H</span><br><b style="font-size: 18px; color: #a855f7;">{(match_sel['log5_local'] or 0.5)*100:.1f}%</b></div>""",
           unsafe_allow_html=True,
       )
     with col4:
@@ -880,43 +891,4 @@ with tab3:
 
     prob_comb = 1.0
     cuota_comb = 1.0
-    nombres_patas = []
-    for pata in patas:
-      prob_comb *= pata["prob_modelo"]
-      cuota_comb *= pata["cuota_decimal"]
-      nombres_patas.append(f"<b>{pata['etiqueta']}</b> ({pata['partido']})")
-
-    ev_parlay = valor_esperado(prob_comb, cuota_comb)
-    stake_parlay = min(kelly(prob_comb, cuota_comb) * 0.25, 0.05) * banco
-
-    st.markdown(
-        f"""
-            <div class="card-match" style="border: 2px solid #6366f1;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h3>🦜 Parlay Recomendado por Piqui</h3>
-                    <span style="background-color: #22c55e20; color: #4ade80; padding: 6px 14px; border-radius: 20px; font-weight: bold;">Efectividad Combinada: {prob_comb*100:.1f}%</span>
-                </div>
-                <ul style="margin: 15px 0; padding-left: 20px; line-height: 1.8;">
-                    <li>{'</li><li>'.join(nombres_patas)}</li>
-                </ul>
-                <hr style="border-color: #334155;">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-                    <div>
-                        Cuota Total Estimada: <b style="color: #818cf8; font-size: 18px;">{cuota_comb:.2f}</b>
-                    </div>
-                    <div>
-                        Inversión Sugerida: <b style="color: #4ade80; font-size: 18px;">${stake_parlay:.2f}</b>
-                    </div>
-                </div>
-            </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #64748b; font-size: 13px;'>Piquis"
-    " AI Engine · Desarrollado para ti. Las apuestas deportivas conllevan"
-    " riesgo.</div>",
-    unsafe_allow_html=True,
-)
+    nombres_patas =
